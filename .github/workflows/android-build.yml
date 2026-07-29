@@ -48,7 +48,9 @@ jobs:
 
       - name: Sync Capacitor Android
         run: |
-          if [ ! -d "android" ]; then
+          if [ ! -f "android/gradlew" ]; then
+            echo "Gradlew missing, regenerating android platform..."
+            rm -rf android
             npx cap add android
           fi
           npx cap sync android
