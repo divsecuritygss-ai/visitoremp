@@ -463,6 +463,7 @@
 
   <script>
     var GAS_URL = "https://script.google.com/macros/s/AKfycbxjwmnXtku-5v62zuvEm_fC89Df0WIwsLGyQyTGh1njMWrugZemLtdsQGx6yzyrPpMx/exec";
+    var PUBLIC_WEB_URL = "https://visitoremp.vercel.app";
 
     var isVisitorMode = false;
     var currentUser = null;
@@ -758,8 +759,7 @@
       if (!q) return;
       q.innerHTML = "";
       
-      var baseUrl = window.location.origin + window.location.pathname;
-      var targetUrl = baseUrl + (baseUrl.endsWith('/') ? '' : '/') + "?v=1";
+      var targetUrl = PUBLIC_WEB_URL + "/?v=1";
       
       setTimeout(() => {
         new QRCode(q, { 
