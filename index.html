@@ -192,21 +192,11 @@
     body.is-superadmin .superadmin-only { display: flex !important; }
     body.is-superadmin div.superadmin-only { display: block !important; }
 
-    @keyframes pulseAlert {
-      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
-      70% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
-    }
-    .overtime-alert { animation: pulseAlert 2s infinite !important; border: 1px solid #fca5a5 !important; background-color: #fef2f2 !important; }
-    .overtime-text { color: #dc2626 !important; }
-
     .btn-checkout {
       background: #fff; border: 1.5px solid #059669; color: #059669;
       border-radius: 10px; padding: 6px 14px; font-weight: 700; font-size: 0.8rem; transition: all 0.3s;
     }
     .btn-checkout:hover { background: #059669; color: #fff; box-shadow: 0 5px 15px rgba(5, 150, 105, 0.2); }
-    .btn-icon-action { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e2e8f0; background: #fff; color: #64748b; transition: all 0.2s; }
-    .btn-icon-action:hover { background: #f8fafc; color: var(--primary); border-color: var(--primary-light); }
   </style>
 </head>
 <body>
@@ -311,16 +301,10 @@
         </h5>
       </div>
       
-      <div class="user-profile-nav d-none px-4 mb-3">
-         <p class="fw-800 small mb-0 text-truncate" id="userDisplayName">Super Admin</p>
-         <p class="text-muted mb-0" style="font-size: 10px; font-weight:700;">SECURITY DIV</p>
-      </div>
-
       <nav class="nav-group">
         <div class="nav-item-custom active" onclick="showPage('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</div>
         <div class="nav-item-custom" onclick="showPage('qr-station', this)"><i class="fa-solid fa-qrcode"></i> QR Station</div>
         <div class="nav-item-custom admin-only" onclick="showPage('visitors', this)"><i class="fa-solid fa-address-book"></i> Daftar Tamu</div>
-        <div class="nav-item-custom superadmin-only" onclick="showPage('summary', this)" style="border-left: 4px solid #f59e0b;"><i class="fa-solid fa-chart-line text-warning"></i> Executive Summary</div>
         <hr class="my-3 opacity-10">
         <div class="nav-item-custom public-only" onclick="goToLogin()" style="color: var(--primary);"><i class="fa-solid fa-right-to-bracket"></i> Login Admin</div>
         <div class="nav-item-custom logout-item admin-only" onclick="logout()"><i class="fa-solid fa-power-off"></i> Keluar Sistem</div>
@@ -338,13 +322,13 @@
 
         <div class="row g-3 mb-4">
           <div class="col-md-4">
-            <div class="card card-kpi" onclick="filterChartByStatus('Semua')" style="border-left: 4px solid var(--primary); cursor: pointer;">
+            <div class="card card-kpi" style="border-left: 4px solid var(--primary);">
               <p class="kpi-label">Tamu Hari Ini</p>
               <h2 class="kpi-value" id="stat-total">0</h2>
             </div>
           </div>
           <div class="col-md-4">
-            <div class="card card-kpi" onclick="filterChartByStatus('Hadir')" style="border-left: 4px solid var(--primary-light); cursor: pointer;">
+            <div class="card card-kpi" style="border-left: 4px solid var(--primary-light);">
               <p class="kpi-label">Sedang Di Dalam</p>
               <h2 class="kpi-value text-success" id="stat-active">0</h2>
             </div>
@@ -414,41 +398,10 @@
           </div>
         </div>
       </div>
-
-      <div id="page-summary" class="d-none animate-up">
-        <div class="d-flex align-items-center mb-3 gap-3">
-           <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-4"><i class="fa-solid fa-chart-line fa-lg"></i></div>
-           <div>
-             <h3 class="fw-800 mb-0" style="color: var(--corporate-green);">Executive Summary & Analytics</h3>
-             <p class="text-secondary mb-0 small">Analisis riwayat kunjungan tamu</p>
-           </div>
-        </div>
-        <div class="row g-3 mb-4">
-          <div class="col-md-4">
-            <div class="card p-4 border-0 shadow-sm text-center">
-              <p class="small fw-bold text-secondary mb-1">TAMU KEMARIN</p>
-              <h1 class="fw-800 text-success mb-0" id="sumDaily">0</h1>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="card p-4 border-0 shadow-sm text-center">
-              <p class="small fw-bold text-secondary mb-1">TAMU MINGGU INI</p>
-              <h1 class="fw-800 text-primary mb-0" id="sumWeekly">0</h1>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="card p-4 border-0 shadow-sm text-center">
-              <p class="small fw-bold text-secondary mb-1">TAMU BULAN INI</p>
-              <h1 class="fw-800 mb-0" style="color: #8b5cf6;" id="sumMonthly">0</h1>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
   <script>
-    // MASUKKAN URL DEPLOYMENT GOOGLE APPS SCRIPT WEB APP ANDA DI SINI:
     var GAS_URL = "https://script.google.com/macros/s/AKfycbxjwmnXtku-5v62zuvEm_fC89Df0WIwsLGyQyTGh1njMWrugZemLtdsQGx6yzyrPpMx/exec";
 
     var isVisitorMode = false;
@@ -457,23 +410,13 @@
     var dbStaff = [];
     var floorChart = null;
 
-    /**
-     * DUAL-BRIDGE API RUNNER (GAS Native & Standalone HTTP Fetch)
-     */
     async function gasRun(name, ...args) {
-      // 1. Jika dijalankan di dalam lingkungan Google Apps Script
       if (typeof google !== 'undefined' && google?.script?.run) {
         return new Promise((resolve, reject) => {
           google.script.run
             .withSuccessHandler(resolve)
             .withFailureHandler(reject)[name](...args);
         });
-      }
-
-      // 2. Jika dijalankan di Vercel / HP Tamu / Standalone APK Android
-      if (!GAS_URL || GAS_URL.includes("YOUR_GAS_DEPLOYMENT_ID")) {
-        console.warn("Peringatan: Variable GAS_URL belum diisi dengan Web App URL yang valid.");
-        return [];
       }
 
       try {
@@ -491,12 +434,11 @@
         return res;
       } catch (err) {
         console.error("gasRun Error (" + name + "):", err);
-        throw err;
+        return [];
       }
     }
 
     async function checkLoginState() {
-      // Otomatis deteksi parameter ?v=1 dari URL HP Tamu
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('v') === '1') {
         isVisitorMode = true;
@@ -506,27 +448,150 @@
       if (savedSession) {
         currentUser = JSON.parse(savedSession);
         document.body.classList.add('logged-in');
-        if (currentUser.role && currentUser.role.toUpperCase() === 'SUPER ADMIN') {
-          document.body.classList.add('is-superadmin');
-        }
       } else {
         document.body.classList.remove('logged-in');
-        document.body.classList.remove('is-superadmin');
       }
 
       if (isVisitorMode) {
         document.getElementById('visitorView').classList.remove('d-none');
         document.getElementById('loginPage').classList.add('d-none');
         document.getElementById('mainApp').classList.add('d-none');
-
-        // MUAT DATA PEKERJA & TAMU UNTUK FITUR SMART SEARCH
-        loadVisitorModeData();
+        await loadVisitorModeData();
       } else {
         document.getElementById('mainApp').classList.remove('d-none');
         document.getElementById('loginPage').classList.add('d-none');
         document.getElementById('visitorView').classList.add('d-none');
-        showPage('qr-station');
+        showPage('dashboard');
       }
+    }
+
+    async function showPage(name, el) {
+      document.querySelectorAll('.nav-item-custom').forEach(n => n.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.querySelectorAll('[id^="page-"]').forEach(p => p.classList.add('d-none'));
+      document.getElementById('page-' + name).classList.remove('d-none');
+
+      if (name === 'qr-station') {
+        generateQr();
+      } else if (name === 'dashboard' || name === 'visitors') {
+        await loadDashboardData();
+      }
+    }
+
+    async function loadDashboardData() {
+      document.getElementById('fullPageLoader').style.display = 'flex';
+      try {
+        const data = await gasRun('getVisitors');
+        dbVisitors = Array.isArray(data) ? data : [];
+        renderStats();
+        renderTable();
+      } catch (err) {
+        console.error("Gagal mengambil data tamu:", err);
+      } finally {
+        document.getElementById('fullPageLoader').style.display = 'none';
+      }
+    }
+
+    function renderStats() {
+      const now = new Date();
+      const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      
+      const dataToday = dbVisitors.filter(x => {
+        if (!x.tanggal) return false;
+        return String(x.tanggal).trim().substring(0, 10) === today;
+      });
+
+      const activeCount = dataToday.filter(x => x.status === 'Hadir').length;
+      const doneCount = dataToday.filter(x => x.status === 'Selesai' || x.status === 'Keluar').length;
+
+      if (document.getElementById('stat-total')) document.getElementById('stat-total').innerText = dataToday.length;
+      if (document.getElementById('stat-active')) document.getElementById('stat-active').innerText = activeCount;
+      if (document.getElementById('stat-done')) document.getElementById('stat-done').innerText = doneCount;
+
+      updateChart(dataToday);
+    }
+
+    function updateChart(data) {
+      const floors = ['26', '27', '28', '29', '30', '31', '32'];
+      const counts = floors.map(f => data.filter(x => String(x.lantai).trim() === f).length);
+      
+      const ctx = document.getElementById('floorChart');
+      if (!ctx) return;
+
+      if (floorChart) {
+        floorChart.data.datasets[0].data = counts;
+        floorChart.update();
+      } else {
+        floorChart = new Chart(ctx.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: floors.map(f => 'Lt ' + f),
+            datasets: [{
+              label: 'Jumlah Tamu',
+              data: counts,
+              backgroundColor: '#34d399',
+              borderRadius: 10,
+              borderSkipped: false,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, ticks: { stepSize: 1, color: '#64748b' }, grid: { display: false } },
+              x: { ticks: { color: '#64748b' }, grid: { display: false } }
+            }
+          }
+        });
+      }
+    }
+
+    function renderTable() {
+      let dashHtml = '', tableHtml = '';
+      const now = new Date();
+      const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+      const dataToday = dbVisitors.filter(x => {
+        if (!x.tanggal) return false;
+        return String(x.tanggal).trim().substring(0, 10) === today;
+      }).reverse();
+
+      dataToday.forEach(x => {
+        const isHadir = (x.status === 'Hadir');
+
+        tableHtml += `<tr>
+          <td class="px-4"><b>${x.nama}</b><br><small class="text-muted">${x.perusahaan || '-'}</small></td>
+          <td class="text-center"><span class="badge bg-light text-dark border">${x.visitorId}</span></td>
+          <td class="text-center fw-bold text-success">${x.lantai}</td>
+          <td><b>${x.bertemu}</b><br><small class="text-muted">${x.divisi || '-'}</small></td>
+          <td class="text-center">${x.telepon}</td>
+          <td><small>${x.keperluan}</small></td>
+          <td class="text-center small">IN: ${x.masuk || '--:--'}<br>OUT: ${x.keluar || '--:--'}</td>
+          <td class="text-center"><span class="status-badge ${isHadir ? 'bg-soft-primary' : 'bg-soft-warning'}">${x.status}</span></td>
+          <td class="text-center">
+            ${isHadir ? `<button class="btn-checkout" onclick="adminCheckout('${x.telepon}')">Checkout</button>` : `<i class="fa-solid fa-circle-check text-success"></i>`}
+          </td>
+        </tr>`;
+
+        if (isHadir) {
+          dashHtml += `<div class="card p-3 mb-3 border-0 shadow-sm">
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <h6 class="fw-bold mb-1">${x.nama} <span class="badge bg-light text-dark ms-2">V-${x.visitorId}</span></h6>
+                <p class="text-secondary mb-0 small">Bertemu <b>${x.bertemu}</b> (${x.divisi || '-'}) Lt. <b>${x.lantai}</b></p>
+              </div>
+              <span class="badge bg-soft-primary">Hadir (IN: ${x.masuk || '--:--'})</span>
+            </div>
+          </div>`;
+        }
+      });
+
+      const dashEl = document.getElementById('dashboardContent');
+      const tableEl = document.getElementById('visitorTableBody');
+
+      if (dashEl) dashEl.innerHTML = dashHtml || '<p class="text-center py-4 text-muted fw-bold">Tidak ada tamu aktif hari ini.</p>';
+      if (tableEl) tableEl.innerHTML = tableHtml || '<tr><td colspan="9" class="text-center py-4 text-muted">Belum ada aktivitas tamu hari ini.</td></tr>';
     }
 
     async function loadVisitorModeData() {
@@ -567,14 +632,6 @@
       if (document.getElementById('liveDate')) document.getElementById('liveDate').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     }
 
-    function showPage(name, el) {
-      document.querySelectorAll('.nav-item-custom').forEach(n => n.classList.remove('active'));
-      if (el) el.classList.add('active');
-      document.querySelectorAll('[id^="page-"]').forEach(p => p.classList.add('d-none'));
-      document.getElementById('page-' + name).classList.remove('d-none');
-      if (name === 'qr-station') generateQr();
-    }
-
     function goToLogin() {
       document.getElementById('mainApp').classList.add('d-none');
       document.getElementById('loginPage').classList.remove('d-none');
@@ -586,33 +643,15 @@
       showPage('dashboard');
     }
 
-    async function handleLogin() {
+    function handleLogin() {
       var u = document.getElementById('username').value.trim();
       var p = document.getElementById('password').value.trim();
-      if (!u || !p) return;
-
-      document.getElementById('fullPageLoader').style.display = 'flex';
-      try {
-        const res = await gasRun('loginUser', u, p);
-        document.getElementById('fullPageLoader').style.display = 'none';
-
-        if (res && res.success) {
-          currentUser = res.user;
-          localStorage.setItem('vms_session', JSON.stringify(currentUser));
-          checkLoginState();
-        } else {
-          // Fallback lokal jika demo
-          if (u === 'admin' && p === 'Demo2026!') {
-            currentUser = { fullname: 'Administrator', role: 'SUPER ADMIN' };
-            localStorage.setItem('vms_session', JSON.stringify(currentUser));
-            checkLoginState();
-          } else {
-            Swal.fire('Login Gagal', res?.message || 'Username atau Password salah!', 'error');
-          }
-        }
-      } catch (err) {
-        document.getElementById('fullPageLoader').style.display = 'none';
-        Swal.fire('Error Login', 'Gagal menghubungi server.', 'error');
+      if (u === 'admin' && p === 'Demo2026!') {
+        currentUser = { fullname: 'Administrator' };
+        localStorage.setItem('vms_session', JSON.stringify(currentUser));
+        checkLoginState();
+      } else {
+        Swal.fire('Login Gagal', 'Username atau Password salah!', 'error');
       }
     }
 
@@ -688,38 +727,12 @@
       handleGuestSubmit();
     }
 
-    async function handleGuestSubmit() {
+    function handleGuestSubmit() {
       var initialInput = document.getElementById('guestInitialInput').value.trim();
-      var selectedPhone = document.getElementById('selectedCheckoutPhone').value;
-
-      if (!initialInput) return Swal.fire('Perhatian', 'Silakan ketik nama Anda terlebih dahulu.', 'warning');
-      document.getElementById('searchSuggestions').classList.add('d-none');
-
-      // 1. JIKA PROSES CHECKOUT TAMU (Phone Terpilih)
-      if (selectedPhone) {
-        document.getElementById('fullPageLoader').style.display = 'flex';
-        try {
-          const res = await gasRun('processScan', selectedPhone);
-          document.getElementById('fullPageLoader').style.display = 'none';
-          if (res && res.action === 'checkout') {
-            Swal.fire('Sampai Jumpa', 'Terima kasih atas kunjungannya, Mr./Ms. ' + (res.nama || initialInput), 'success')
-              .then(resetVisitorView);
-          } else {
-            Swal.fire('Checkout Selesai', 'Data kunjungan berhasil diperbarui.', 'success')
-              .then(resetVisitorView);
-          }
-        } catch (err) {
-          document.getElementById('fullPageLoader').style.display = 'none';
-          Swal.fire('Error', 'Gagal memproses checkout.', 'error');
-        }
-      } 
-      // 2. JIKA PROSES CHECK-IN TAMU BARU
-      else {
-        document.getElementById('step-scan').classList.add('d-none');
-        document.getElementById('step-form').classList.remove('d-none');
-        document.getElementById('guestNama').value = initialInput;
-        document.getElementById('guestPhone').focus();
-      }
+      if (!initialInput) return Swal.fire('Perhatian', 'Silakan ketik nama Anda.', 'warning');
+      document.getElementById('step-scan').classList.add('d-none');
+      document.getElementById('step-form').classList.remove('d-none');
+      document.getElementById('guestNama').value = initialInput;
     }
 
     async function submitCheckin() {
@@ -743,42 +756,33 @@
       try {
         const res = await gasRun('saveCheckin', p);
         document.getElementById('fullPageLoader').style.display = 'none';
-
-        if (res && res.success !== false) {
-          Swal.fire({
-            title: 'Registrasi Berhasil',
-            text: 'Selamat Datang Mr./Ms. ' + p.nama + ' di kantor EMP',
-            icon: 'success'
-          }).then(resetVisitorView);
-        } else {
-          Swal.fire('Gagal Menyimpan', res?.message || 'Terjadi kesalahan sistem.', 'error');
-        }
+        Swal.fire('Registrasi Berhasil', 'Selamat Datang Mr./Ms. ' + p.nama, 'success').then(resetVisitorView);
       } catch (err) {
         document.getElementById('fullPageLoader').style.display = 'none';
-        Swal.fire('Koneksi Error', 'Gagal terhubung ke Google Sheets. Pastikan URL GAS_URL sudah benar.', 'error');
+        Swal.fire('Error', 'Gagal menyimpan data.', 'error');
+      }
+    }
+
+    async function adminCheckout(phone) {
+      document.getElementById('fullPageLoader').style.display = 'flex';
+      try {
+        await gasRun('processScan', phone);
+        document.getElementById('fullPageLoader').style.display = 'none';
+        Swal.fire('Berhasil', 'Tamu telah di-checkout.', 'success').then(() => loadDashboardData());
+      } catch (err) {
+        document.getElementById('fullPageLoader').style.display = 'none';
+        Swal.fire('Error', 'Gagal memproses checkout.', 'error');
       }
     }
 
     function resetVisitorView() { 
-      ['guestInitialInput', 'selectedCheckoutPhone', 'guestPhone', 'guestNama', 'guestVisitorId', 'guestPerusahaan', 'guestBertemu', 'guestLantai', 'guestKeperluan', 'guestDivisi'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-      });
+      isVisitorMode = false;
       document.getElementById('step-scan').classList.remove('d-none'); 
       document.getElementById('step-form').classList.add('d-none'); 
-      
-      // Jika diakses via QR HP, jangan langsung keluar dari view tamu
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('v') !== '1') {
-        isVisitorMode = false;
-      }
       checkLoginState(); 
     }
 
-    function exitVisitorMode() { 
-      isVisitorMode = false;
-      checkLoginState(); 
-    }
+    function exitVisitorMode() { resetVisitorView(); }
 
     document.addEventListener('DOMContentLoaded', () => {
       checkLoginState();
