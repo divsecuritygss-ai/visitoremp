@@ -197,6 +197,16 @@
       border-radius: 10px; padding: 6px 14px; font-weight: 700; font-size: 0.8rem; transition: all 0.3s;
     }
     .btn-checkout:hover { background: #059669; color: #fff; box-shadow: 0 5px 15px rgba(5, 150, 105, 0.2); }
+    .btn-icon-action { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e2e8f0; background: #fff; color: #64748b; transition: all 0.2s; }
+    .btn-icon-action:hover { background: #f8fafc; color: var(--primary); border-color: var(--primary-light); }
+
+    @keyframes pulseAlert {
+      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+      70% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+    .overtime-alert { animation: pulseAlert 2s infinite !important; border: 1px solid #fca5a5 !important; background-color: #fef2f2 !important; }
+    .overtime-text { color: #dc2626 !important; }
   </style>
 </head>
 <body>
@@ -401,6 +411,56 @@
     </div>
   </div>
 
+  <div class="modal fade" id="editVisitorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-800 text-success">Edit Data Pengunjung</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <input type="hidden" id="editRowIndex">
+          <div class="mb-3">
+            <label class="small fw-bold text-secondary mb-1">Nama Lengkap</label>
+            <input type="text" id="editNama" class="form-control rounded-3">
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="small fw-bold text-secondary mb-1">No. Visitor</label>
+              <input type="text" id="editVisitorId" class="form-control rounded-3">
+            </div>
+            <div class="col-6 mb-3">
+              <label class="small fw-bold text-secondary mb-1">Lantai</label>
+              <input type="text" id="editLantai" class="form-control rounded-3">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="small fw-bold text-secondary mb-1">Bertemu Staf</label>
+              <input type="text" id="editBertemu" class="form-control rounded-3">
+            </div>
+            <div class="col-6 mb-3">
+              <label class="small fw-bold text-secondary mb-1">Divisi</label>
+              <input type="text" id="editDivisi" class="form-control rounded-3">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="small fw-bold text-secondary mb-1">Perusahaan</label>
+            <input type="text" id="editPerusahaan" class="form-control rounded-3">
+          </div>
+          <div class="mb-0">
+            <label class="small fw-bold text-secondary mb-1">Keperluan</label>
+            <textarea id="editKeperluan" class="form-control rounded-3" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-light rounded-3 fw-bold" data-bs-dismiss="modal">Batal</button>
+          <button type="button" onclick="saveEditData()" class="btn btn-success rounded-3 fw-bold px-4" style="background: var(--primary);">Simpan Perubahan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     var GAS_URL = "https://script.google.com/macros/s/AKfycbxjwmnXtku-5v62zuvEm_fC89Df0WIwsLGyQyTGh1njMWrugZemLtdsQGx6yzyrPpMx/exec";
 
@@ -409,6 +469,16 @@
     var dbVisitors = [];
     var dbStaff = [];
     var floorChart = null;
+    var editModal = null;
+
+    function formatTime(val) {
+      if (!val) return "--:--";
+      if (typeof val === 'string') {
+        const timeMatch = val.match(/\d{2}:\d{2}/);
+        return timeMatch ? timeMatch[0] : val;
+      }
+      return val;
+    }
 
     async function gasRun(name, ...args) {
       if (typeof google !== 'undefined' && google?.script?.run) {
@@ -551,6 +621,7 @@
       let dashHtml = '', tableHtml = '';
       const now = new Date();
       const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      const isOTGlobal = now.getHours() >= 16;
 
       const dataToday = dbVisitors.filter(x => {
         if (!x.tanggal) return false;
@@ -558,30 +629,60 @@
       }).reverse();
 
       dataToday.forEach(x => {
-        const isHadir = (x.status === 'Hadir');
+        const hadir = (x.status === 'Hadir');
+        const ot = isOTGlobal && hadir;
+        const jamMasuk = formatTime(x.masuk);
+        const jamKeluar = formatTime(x.keluar);
 
-        tableHtml += `<tr>
-          <td class="px-4"><b>${x.nama}</b><br><small class="text-muted">${x.perusahaan || '-'}</small></td>
-          <td class="text-center"><span class="badge bg-light text-dark border">${x.visitorId}</span></td>
-          <td class="text-center fw-bold text-success">${x.lantai}</td>
-          <td><b>${x.bertemu}</b><br><small class="text-muted">${x.divisi || '-'}</small></td>
-          <td class="text-center">${x.telepon}</td>
-          <td><small>${x.keperluan}</small></td>
-          <td class="text-center small">IN: ${x.masuk || '--:--'}<br>OUT: ${x.keluar || '--:--'}</td>
-          <td class="text-center"><span class="status-badge ${isHadir ? 'bg-soft-primary' : 'bg-soft-warning'}">${x.status}</span></td>
-          <td class="text-center">
-            ${isHadir ? `<button class="btn-checkout" onclick="adminCheckout('${x.telepon}')">Checkout</button>` : `<i class="fa-solid fa-circle-check text-success"></i>`}
+        // -- SUSUNAN TABEL DAFTAR TAMU --
+        tableHtml += `<tr class="${ot ? 'overtime-alert' : ''} animate-up">
+          <td class="px-4">
+            <div><b class="${ot ? 'overtime-text' : ''}">${x.nama}</b></div>
+            <div class="small text-secondary" style="font-weight: 500;"><i class="fa-regular fa-building me-1"></i>${x.perusahaan || '-'}</div>
           </td>
-        </tr>`;
+          <td class="text-center"><span class="badge bg-light text-secondary border px-3 py-2">${x.visitorId}</span></td>
+          <td class="text-center fw-bold text-success">${x.lantai}</td>
+          <td>
+            <div><b style="color: var(--primary-dark);">${x.bertemu}</b></div>
+            <div class="small text-muted"><i class="fa-solid fa-sitemap me-1" style="font-size: 10px;"></i>${x.divisi || '-'}</div>
+          </td>
+          <td class="text-center fw-bold text-secondary" style="font-size: 0.85rem;">${x.telepon}</td>
+          <td><div class="small text-truncate" style="max-width: 150px;">${x.keperluan}</div></td>
+          <td class="text-center small">
+              <div class="fw-bold text-success">IN: ${jamMasuk}</div>
+              <div class="text-muted">OUT: ${jamKeluar}</div>
+          </td>
+          <td class="text-center">
+            <span class="status-badge ${hadir ? (ot ? 'bg-soft-danger overtime-text' : 'bg-soft-primary') : 'bg-soft-warning'}">
+              ${hadir ? (ot ? 'OVERTIME' : 'DI DALAM') : 'KELUAR'}
+            </span>
+          </td>
+          <td class="text-center">
+            <div class="admin-only align-items-center justify-content-center gap-2">
+              <button class="btn-icon-action" onclick="openEditModal(${x.row_index})" title="Edit Data"><i class="fa-solid fa-pen-to-square"></i></button>
+              ${hadir ? `<button class="btn-checkout" onclick="adminCheckout('${x.telepon}')">Checkout</button>` : `<i class="fa-solid fa-circle-check text-success fa-lg"></i>`}
+            </div>
+            <div class="public-only">
+              ${hadir ? '<span class="badge bg-light text-dark">Sesi Aktif</span>' : '<i class="fa-solid fa-check-circle text-success"></i>'}
+            </div>
+          </td></tr>`;
 
-        if (isHadir) {
-          dashHtml += `<div class="card p-3 mb-3 border-0 shadow-sm">
-            <div class="d-flex align-items-center justify-content-between">
-              <div>
-                <h6 class="fw-bold mb-1">${x.nama} <span class="badge bg-light text-dark ms-2">V-${x.visitorId}</span></h6>
-                <p class="text-secondary mb-0 small">Bertemu <b>${x.bertemu}</b> (${x.divisi || '-'}) Lt. <b>${x.lantai}</b></p>
+        // -- SUSUNAN KARTU ANTREAN DI DASHBOARD --
+        if (hadir) {
+          dashHtml += `<div class="card p-3 mb-3 border-0 shadow-sm ${ot ? 'overtime-alert' : ''}">
+            <div class="d-flex align-items-center gap-3">
+              <div class="${ot ? 'bg-danger text-white' : 'bg-success text-white'} p-3 rounded-4 shadow-sm" style="background: ${ot ? '#dc2626' : 'var(--primary)'} !important;"><i class="fa-solid fa-user-clock"></i></div>
+              <div class="flex-grow-1">
+                <h6 class="fw-bold mb-0 ${ot ? 'overtime-text' : ''}">${x.nama} <span class="badge bg-light text-secondary ms-2 small" style="font-size: 10px;">V-${x.visitorId}</span></h6>
+                <p class="text-secondary mb-1 small text-truncate" style="font-weight: 500;"><i class="fa-regular fa-building me-1"></i>${x.perusahaan || '-'}</p>
+                <p class="text-secondary mb-0 small text-truncate">Bertemu <b>${x.bertemu}</b> (${x.divisi || '-'}) di Lantai <b>${x.lantai}</b></p>
               </div>
-              <span class="badge bg-soft-primary">Hadir (IN: ${x.masuk || '--:--'})</span>
+              <div class="text-end">
+                <p class="mb-0 fw-bold small ${ot ? 'text-danger' : 'text-success'}">Masuk: ${jamMasuk}</p>
+                <div class="admin-only">
+                  <button class="btn btn-sm btn-link text-success p-0 fw-bold text-decoration-none" onclick="adminCheckout('${x.telepon}')">CHECKOUT <i class="fa-solid fa-chevron-right ms-1"></i></button>
+                </div>
+              </div>
             </div>
           </div>`;
         }
@@ -590,8 +691,54 @@
       const dashEl = document.getElementById('dashboardContent');
       const tableEl = document.getElementById('visitorTableBody');
 
-      if (dashEl) dashEl.innerHTML = dashHtml || '<p class="text-center py-4 text-muted fw-bold">Tidak ada tamu aktif hari ini.</p>';
-      if (tableEl) tableEl.innerHTML = tableHtml || '<tr><td colspan="9" class="text-center py-4 text-muted">Belum ada aktivitas tamu hari ini.</td></tr>';
+      if (dashEl) dashEl.innerHTML = dashHtml || '<p class="text-center py-5 opacity-50 fw-bold">Tidak ada antrean tamu aktif hari ini.</p>';
+      if (tableEl) tableEl.innerHTML = tableHtml || '<tr><td colspan="9" class="text-center py-5">Belum ada aktivitas tamu untuk hari ini.</td></tr>';
+    }
+
+    function openEditModal(rowIndex) {
+      const visitor = dbVisitors.find(v => v.row_index == rowIndex);
+      if (!visitor) return Swal.fire('Error', 'Data kunjungan tidak ditemukan.', 'error');
+
+      document.getElementById('editRowIndex').value = visitor.row_index; 
+      document.getElementById('editNama').value = visitor.nama || "";
+      document.getElementById('editVisitorId').value = visitor.visitorId || "";
+      document.getElementById('editLantai').value = visitor.lantai || "";
+      document.getElementById('editBertemu').value = visitor.bertemu || "";
+      document.getElementById('editDivisi').value = visitor.divisi || "";
+      document.getElementById('editPerusahaan').value = visitor.perusahaan || "";
+      document.getElementById('editKeperluan').value = visitor.keperluan || "";
+
+      if (!editModal) editModal = new bootstrap.Modal(document.getElementById('editVisitorModal'));
+      editModal.show();
+    }
+
+    async function saveEditData() {
+      const payload = {
+        row_index: document.getElementById('editRowIndex').value, 
+        nama: document.getElementById('editNama').value,
+        visitorId: document.getElementById('editVisitorId').value,
+        lantai: document.getElementById('editLantai').value,
+        bertemu: document.getElementById('editBertemu').value,
+        divisi: document.getElementById('editDivisi').value,
+        perusahaan: document.getElementById('editPerusahaan').value,
+        keperluan: document.getElementById('editKeperluan').value
+      };
+
+      document.getElementById('fullPageLoader').style.display = 'flex';
+      try {
+        const res = await gasRun('updateVisitor', payload);
+        document.getElementById('fullPageLoader').style.display = 'none';
+        if (res && res.success) {
+          if (editModal) editModal.hide();
+          await loadDashboardData();
+          Swal.fire('Berhasil', 'Data pengunjung berhasil diperbarui!', 'success');
+        } else {
+          Swal.fire('Gagal', res?.message || 'Gagal menyimpan perubahan.', 'error');
+        }
+      } catch (err) {
+        document.getElementById('fullPageLoader').style.display = 'none';
+        Swal.fire('Error', 'Terjadi kesalahan sistem.', 'error');
+      }
     }
 
     async function loadVisitorModeData() {
@@ -764,15 +911,28 @@
     }
 
     async function adminCheckout(phone) {
-      document.getElementById('fullPageLoader').style.display = 'flex';
-      try {
-        await gasRun('processScan', phone);
-        document.getElementById('fullPageLoader').style.display = 'none';
-        Swal.fire('Berhasil', 'Tamu telah di-checkout.', 'success').then(() => loadDashboardData());
-      } catch (err) {
-        document.getElementById('fullPageLoader').style.display = 'none';
-        Swal.fire('Error', 'Gagal memproses checkout.', 'error');
-      }
+      Swal.fire({
+        title: 'Checkout Tamu?',
+        text: "Apakah Anda yakin ingin menyelesaikan kunjungan tamu ini?",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#059669',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Ya, Checkout!',
+        cancelButtonText: 'Batal'
+      }).then(async (result) => {
+        if (result.isConfirmed) {
+          document.getElementById('fullPageLoader').style.display = 'flex';
+          try {
+            await gasRun('processScan', phone);
+            document.getElementById('fullPageLoader').style.display = 'none';
+            Swal.fire('Berhasil', 'Tamu telah di-checkout.', 'success').then(() => loadDashboardData());
+          } catch (err) {
+            document.getElementById('fullPageLoader').style.display = 'none';
+            Swal.fire('Error', 'Gagal memproses checkout.', 'error');
+          }
+        }
+      });
     }
 
     function resetVisitorView() { 
