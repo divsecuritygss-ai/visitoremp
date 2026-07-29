@@ -1,12 +1,7 @@
 {
   "appId": "com.emp.vms.app",
   "appName": "VMS EMP Corporate",
-  "webDir": ".",
-  "bundledWebRuntime": false,
-  "server": {
-    "androidScheme": "https",
-    "cleartext": true
-  },
+  "webDir": "www",
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 2000,
