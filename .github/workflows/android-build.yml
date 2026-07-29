@@ -40,9 +40,17 @@ jobs:
           fi
           npm install @capacitor/core@^6.0.0 @capacitor/cli@^6.0.0 @capacitor/android@^6.0.0
 
+      - name: Prepare Web Assets Directory
+        run: |
+          mkdir -p www
+          cp index.html www/
+          if [ -d src ]; then cp -r src www/; fi
+
       - name: Sync Capacitor Android
         run: |
-          npx cap add android || true
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
           npx cap sync android
 
       - name: Build Android Debug APK
