@@ -1,0 +1,21 @@
+{
+  "appId": "com.emp.vms.app",
+  "appName": "VMS EMP Corporate",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#064e3b",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#064e3b"
+    }
+  }
+}
