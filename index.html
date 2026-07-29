@@ -448,24 +448,55 @@
   </div>
 
   <script>
+    // MASUKKAN URL DEPLOYMENT GOOGLE APPS SCRIPT WEB APP ANDA DI SINI:
+    var GAS_URL = "https://script.google.com/macros/s/AKfycbxjwmnXtku-5v62zuvEm_fC89Df0WIwsLGyQyTGh1njMWrugZemLtdsQGx6yzyrPpMx/exec";
+
     var isVisitorMode = false;
     var currentUser = null;
     var dbVisitors = [];
     var dbStaff = [];
     var floorChart = null;
 
-    function gasRun(name, ...args) {
-      return new Promise((resolve, reject) => {
-        if (typeof google !== 'undefined' && google?.script?.run) {
-          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args);
-        } else {
-          resolve([]);
-        }
-      });
+    /**
+     * DUAL-BRIDGE API RUNNER (GAS Native & Standalone HTTP Fetch)
+     */
+    async function gasRun(name, ...args) {
+      // 1. Jika dijalankan di dalam lingkungan Google Apps Script
+      if (typeof google !== 'undefined' && google?.script?.run) {
+        return new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)[name](...args);
+        });
+      }
+
+      // 2. Jika dijalankan di Vercel / HP Tamu / Standalone APK Android
+      if (!GAS_URL || GAS_URL.includes("YOUR_GAS_DEPLOYMENT_ID")) {
+        console.warn("Peringatan: Variable GAS_URL belum diisi dengan Web App URL yang valid.");
+        return [];
+      }
+
+      try {
+        const response = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            action: name,
+            payload: JSON.stringify(args)
+          })
+        });
+
+        if (!response.ok) throw new Error("HTTP error " + response.status);
+        const res = await response.json();
+        return res;
+      } catch (err) {
+        console.error("gasRun Error (" + name + "):", err);
+        throw err;
+      }
     }
 
-    function checkLoginState() {
-      // PERBAIKAN PENTING: Otomatis deteksi parameter ?v=1 dari URL HP Tamu
+    async function checkLoginState() {
+      // Otomatis deteksi parameter ?v=1 dari URL HP Tamu
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('v') === '1') {
         isVisitorMode = true;
@@ -487,6 +518,9 @@
         document.getElementById('visitorView').classList.remove('d-none');
         document.getElementById('loginPage').classList.add('d-none');
         document.getElementById('mainApp').classList.add('d-none');
+
+        // MUAT DATA PEKERJA & TAMU UNTUK FITUR SMART SEARCH
+        loadVisitorModeData();
       } else {
         document.getElementById('mainApp').classList.remove('d-none');
         document.getElementById('loginPage').classList.add('d-none');
@@ -495,12 +529,23 @@
       }
     }
 
+    async function loadVisitorModeData() {
+      try {
+        const staffRes = await gasRun('getStaffData');
+        if (Array.isArray(staffRes)) dbStaff = staffRes;
+        
+        const visitorRes = await gasRun('getVisitors');
+        if (Array.isArray(visitorRes)) dbVisitors = visitorRes;
+      } catch (e) {
+        console.error("Gagal memuat data staf/tamu:", e);
+      }
+    }
+
     function generateQr() {
       var q = document.getElementById("qrcode");
       if (!q) return;
       q.innerHTML = "";
       
-      // PERBAIKAN PENTING: Kunci paksa URL QR memuat ?v=1
       var baseUrl = window.location.origin + window.location.pathname;
       var targetUrl = baseUrl + (baseUrl.endsWith('/') ? '' : '/') + "?v=1";
       
@@ -541,15 +586,33 @@
       showPage('dashboard');
     }
 
-    function handleLogin() {
+    async function handleLogin() {
       var u = document.getElementById('username').value.trim();
       var p = document.getElementById('password').value.trim();
-      if (u === 'admin' && p === 'Demo2026!') {
-        currentUser = { fullname: 'Administrator', role: 'SUPER ADMIN' };
-        localStorage.setItem('vms_session', JSON.stringify(currentUser));
-        checkLoginState();
-      } else {
-        Swal.fire('Login Gagal', 'Username atau Password salah!', 'error');
+      if (!u || !p) return;
+
+      document.getElementById('fullPageLoader').style.display = 'flex';
+      try {
+        const res = await gasRun('loginUser', u, p);
+        document.getElementById('fullPageLoader').style.display = 'none';
+
+        if (res && res.success) {
+          currentUser = res.user;
+          localStorage.setItem('vms_session', JSON.stringify(currentUser));
+          checkLoginState();
+        } else {
+          // Fallback lokal jika demo
+          if (u === 'admin' && p === 'Demo2026!') {
+            currentUser = { fullname: 'Administrator', role: 'SUPER ADMIN' };
+            localStorage.setItem('vms_session', JSON.stringify(currentUser));
+            checkLoginState();
+          } else {
+            Swal.fire('Login Gagal', res?.message || 'Username atau Password salah!', 'error');
+          }
+        }
+      } catch (err) {
+        document.getElementById('fullPageLoader').style.display = 'none';
+        Swal.fire('Error Login', 'Gagal menghubungi server.', 'error');
       }
     }
 
@@ -625,37 +688,97 @@
       handleGuestSubmit();
     }
 
-    function handleGuestSubmit() {
+    async function handleGuestSubmit() {
       var initialInput = document.getElementById('guestInitialInput').value.trim();
-      if (!initialInput) return Swal.fire('Perhatian', 'Silakan ketik nama Anda.', 'warning');
-      document.getElementById('step-scan').classList.add('d-none');
-      document.getElementById('step-form').classList.remove('d-none');
-      document.getElementById('guestNama').value = initialInput;
+      var selectedPhone = document.getElementById('selectedCheckoutPhone').value;
+
+      if (!initialInput) return Swal.fire('Perhatian', 'Silakan ketik nama Anda terlebih dahulu.', 'warning');
+      document.getElementById('searchSuggestions').classList.add('d-none');
+
+      // 1. JIKA PROSES CHECKOUT TAMU (Phone Terpilih)
+      if (selectedPhone) {
+        document.getElementById('fullPageLoader').style.display = 'flex';
+        try {
+          const res = await gasRun('processScan', selectedPhone);
+          document.getElementById('fullPageLoader').style.display = 'none';
+          if (res && res.action === 'checkout') {
+            Swal.fire('Sampai Jumpa', 'Terima kasih atas kunjungannya, Mr./Ms. ' + (res.nama || initialInput), 'success')
+              .then(resetVisitorView);
+          } else {
+            Swal.fire('Checkout Selesai', 'Data kunjungan berhasil diperbarui.', 'success')
+              .then(resetVisitorView);
+          }
+        } catch (err) {
+          document.getElementById('fullPageLoader').style.display = 'none';
+          Swal.fire('Error', 'Gagal memproses checkout.', 'error');
+        }
+      } 
+      // 2. JIKA PROSES CHECK-IN TAMU BARU
+      else {
+        document.getElementById('step-scan').classList.add('d-none');
+        document.getElementById('step-form').classList.remove('d-none');
+        document.getElementById('guestNama').value = initialInput;
+        document.getElementById('guestPhone').focus();
+      }
     }
 
-    function submitCheckin() {
+    async function submitCheckin() {
       var p = { 
         id: document.getElementById('guestPhone').value.trim(), 
         nama: document.getElementById('guestNama').value.trim(), 
-        visitorId: document.getElementById('guestVisitorId').value, 
-        perusahaan: document.getElementById('guestPerusahaan').value, 
-        bertemu: document.getElementById('guestBertemu').value, 
-        lantai: document.getElementById('guestLantai').value, 
-        keperluan: document.getElementById('guestKeperluan').value,
-        divisi: document.getElementById('guestDivisi').value
+        visitorId: document.getElementById('guestVisitorId').value.trim(), 
+        perusahaan: document.getElementById('guestPerusahaan').value.trim(), 
+        bertemu: document.getElementById('guestBertemu').value.trim(), 
+        lantai: document.getElementById('guestLantai').value.trim(), 
+        keperluan: document.getElementById('guestKeperluan').value.trim(),
+        divisi: document.getElementById('guestDivisi').value.trim()
       };
-      if (!p.nama || !p.id || !p.visitorId || !p.lantai) return Swal.fire('Data Kurang', 'Nama, No. Telp, No. Visitor, dan Lantai wajib diisi.', 'warning');
-      Swal.fire('Registrasi Berhasil', 'Selamat Datang Mr./Ms. ' + p.nama, 'success').then(resetVisitorView);
+
+      if (!p.nama || !p.id || !p.visitorId || !p.lantai) {
+        return Swal.fire('Data Kurang', 'Nama, No. Telp, No. Visitor, dan Lantai wajib diisi.', 'warning');
+      }
+
+      document.getElementById('fullPageLoader').style.display = 'flex';
+
+      try {
+        const res = await gasRun('saveCheckin', p);
+        document.getElementById('fullPageLoader').style.display = 'none';
+
+        if (res && res.success !== false) {
+          Swal.fire({
+            title: 'Registrasi Berhasil',
+            text: 'Selamat Datang Mr./Ms. ' + p.nama + ' di kantor EMP',
+            icon: 'success'
+          }).then(resetVisitorView);
+        } else {
+          Swal.fire('Gagal Menyimpan', res?.message || 'Terjadi kesalahan sistem.', 'error');
+        }
+      } catch (err) {
+        document.getElementById('fullPageLoader').style.display = 'none';
+        Swal.fire('Koneksi Error', 'Gagal terhubung ke Google Sheets. Pastikan URL GAS_URL sudah benar.', 'error');
+      }
     }
 
     function resetVisitorView() { 
-      isVisitorMode = false;
+      ['guestInitialInput', 'selectedCheckoutPhone', 'guestPhone', 'guestNama', 'guestVisitorId', 'guestPerusahaan', 'guestBertemu', 'guestLantai', 'guestKeperluan', 'guestDivisi'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
       document.getElementById('step-scan').classList.remove('d-none'); 
       document.getElementById('step-form').classList.add('d-none'); 
+      
+      // Jika diakses via QR HP, jangan langsung keluar dari view tamu
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('v') !== '1') {
+        isVisitorMode = false;
+      }
       checkLoginState(); 
     }
 
-    function exitVisitorMode() { resetVisitorView(); }
+    function exitVisitorMode() { 
+      isVisitorMode = false;
+      checkLoginState(); 
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
       checkLoginState();
