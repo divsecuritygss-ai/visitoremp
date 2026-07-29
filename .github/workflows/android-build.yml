@@ -23,7 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -36,12 +35,10 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          if [ -f package.json ]; then
-            npm install
-          else
+          if [ ! -f package.json ]; then
             npm init -y
-            npm install @capacitor/core @capacitor/cli @capacitor/android
           fi
+          npm install @capacitor/core@^6.0.0 @capacitor/cli@^6.0.0 @capacitor/android@^6.0.0
 
       - name: Sync Capacitor Android
         run: |
