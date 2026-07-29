@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>VMS - EMP Corporate Edition</title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root { 
+      --primary: #059669; 
+      --primary-dark: #064e3b;
+      --primary-light: #34d399;
+      --secondary: #64748b;
+      --bg-body: #f8fafc;
+      --sidebar-width: 280px; 
+      --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+      --corporate-green: #064e3b;
+      --sat: env(safe-area-inset-top);
+      --sab: env(safe-area-inset-bottom);
+    }
+    
+    body { 
+      font-family: 'Plus Jakarta Sans', sans-serif; 
+      background-color: var(--bg-body); 
+      color: #1e293b; 
+      margin: 0;
+      padding-top: var(--sat);
+      padding-bottom: var(--sab);
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+    .sidebar { 
+      width: var(--sidebar-width); 
+      height: 100vh; 
+      position: fixed; 
+      left: 0; 
+      top: 0; 
+      background: #ffffff; 
+      border-right: 1px solid #e2e8f0;
+      z-index: 1001; 
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      padding: calc(24px + var(--sat)) 0 24px;
+    }
+    
+    .main-content { 
+      margin-left: var(--sidebar-width); 
+      padding: 30px 40px; 
+      min-height: 100vh;
+    }
+
+    .mobile-header {
+      display: none;
+      background: #fff;
+      padding: calc(12px + var(--sat)) 20px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    @media (max-width: 991.98px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.active { transform: translateX(0); box-shadow: 10px 0 30px rgba(0,0,0,0.15); }
+      .main-content { margin-left: 0; padding: 15px; }
+      .mobile-header { display: flex; }
+      .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: none; backdrop-filter: blur(2px); }
+      .sidebar-overlay.active { display: block; }
+    }
+
+    .nav-brand { padding: 10px 25px 30px; }
+    .nav-brand h5 { color: var(--corporate-green); font-weight: 800; letter-spacing: -0.5px; }
+    
+    .nav-group { padding: 0 15px; flex-grow: 1; }
+    .nav-item-custom { 
+      padding: 14px 20px; 
+      border-radius: 12px; 
+      margin-bottom: 6px; 
+      color: var(--secondary); 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      gap: 15px; 
+      transition: all 0.25s ease; 
+      font-weight: 600;
+      font-size: 0.95rem;
+      border-left: 4px solid transparent;
+    }
+    
+    .nav-item-custom:hover { background: #f8fafc; color: var(--primary); transform: translateX(4px); }
+    .nav-item-custom.active { 
+      background: linear-gradient(90deg, #ecfdf5 0%, #ffffff 100%); 
+      color: var(--primary-dark); 
+      border-left: 4px solid var(--primary);
+      box-shadow: 2px 4px 12px rgba(5, 150, 105, 0.05);
+      font-weight: 700;
+    }
+    .nav-item-custom.active i { color: var(--primary); }
+    
+    .logout-item { margin-top: 20px; color: #ef4444; border-top: 1px solid #f1f5f9; padding-top: 20px; }
+    .logout-item:hover { color: #b91c1c; background: #fef2f2; }
+
+    .enterprise-banner {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+      border-radius: 20px;
+      padding: 24px 35px;
+      color: white;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 15px 35px -5px rgba(5, 150, 105, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card { border-radius: 20px; border: 1px solid #e2e8f0; background: #fff; box-shadow: var(--card-shadow); }
+    .card-kpi { padding: 25px; transition: transform 0.3s, box-shadow 0.3s; }
+    .card-kpi:hover { transform: translateY(-3px); box-shadow: 0 15px 30px -5px rgba(0,0,0,0.08); }
+    .kpi-label { font-size: 0.75rem; font-weight: 700; color: var(--secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+    .kpi-value { font-size: 2.2rem; font-weight: 800; color: var(--corporate-green); margin-bottom: 0; }
+
+    .table thead th { 
+      background-color: #f8fafc; 
+      text-transform: uppercase; 
+      font-size: 0.7rem; 
+      font-weight: 800; 
+      color: var(--corporate-green); 
+      padding: 16px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .table tbody td { padding: 18px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #334155; }
+
+    .status-badge { padding: 6px 12px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; }
+    .bg-soft-primary { background: #dcfce7; color: #059669; }
+    .bg-soft-warning { background: #fef3c7; color: #b45309; }
+
+    .modern-clock-widget {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 24px;
+      padding: 25px 35px;
+      box-shadow: 0 20px 40px -10px rgba(5, 150, 105, 0.1);
+      display: inline-block;
+      position: relative;
+      overflow: hidden;
+    }
+    .digital-clock {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 3.8rem;
+      font-weight: 800;
+      background: -webkit-linear-gradient(0deg, var(--primary-dark), var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      letter-spacing: -2px;
+      margin-bottom: 5px;
+    }
+    .modern-date {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--secondary);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .admin-only { display: none !important; }
+    .logged-in .admin-only { display: inline-flex !important; }
+    .logged-in div.admin-only { display: flex !important; }
+    .public-only { display: block; }
+    .logged-in .public-only { display: none !important; }
+
+    @keyframes pulseAlert {
+      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+      70% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+    .overtime-alert { animation: pulseAlert 2s infinite !important; border: 1px solid #fca5a5 !important; background-color: #fef2f2 !important; }
+    .overtime-text { color: #dc2626 !important; }
+  </style>
+</head>
+<body>
+
+  <input type="hidden" id="visitorModeVal" value="0">
+
+  <div id="fullPageLoader" style="display:none; position:fixed; inset:0; z-index:9999; justify-content:center; align-items:center; flex-direction:column; background: rgba(255,255,255,0.92); backdrop-filter: blur(6px);">
+    <div class="spinner-border text-success" style="width: 3rem; height: 3rem;" role="status"></div>
+    <p class="mt-4 fw-bold text-success small" style="letter-spacing: 2px;">MEMPROSES DATA...</p>
+  </div>
+
+  <div id="visitorView" class="d-none">
+    <div class="visitor-hero" style="background: linear-gradient(135deg, var(--primary-dark), var(--primary)); padding: 60px 20px; text-align: center; color: white; border-bottom-left-radius: 40px; border-bottom-right-radius: 40px; margin-bottom: -40px;">
+      <h2 class="fw-800 mb-2">E-Guest EMP</h2>
+      <p class="opacity-75">Sistem Registrasi Tamu Corporate</p>
+    </div>
+    <div class="container pb-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-5 col-md-8">
+          <div id="step-scan" class="card visitor-card p-4 p-md-5 animate-up border-0">
+            <div class="text-center mb-4">
+              <div class="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex p-4 mb-3">
+                <i class="fa-solid fa-address-card fa-2x"></i>
+              </div>
+              <h4 class="fw-bold">Selamat Datang</h4>
+              <p class="text-muted small">Ketik nama Anda untuk memulai atau check-out</p>
+            </div>
+            
+            <div class="position-relative mb-4">
+              <input type="text" id="guestInitialInput" class="form-control form-control-lg text-center fs-4 py-3 rounded-4" placeholder="Ketik Nama Anda..." autocomplete="off" onkeyup="handleSmartSearch(this.value)">
+              <div id="searchSuggestions" class="list-group position-absolute w-100 shadow-lg d-none text-start" style="top: 100%; left: 0; z-index: 1000; border-radius: 12px; overflow: hidden; margin-top: 5px;"></div>
+            </div>
+            
+            <input type="hidden" id="selectedCheckoutPhone" value="">
+            <button onclick="handleGuestSubmit()" class="btn btn-success btn-lg w-100 fw-bold rounded-4 py-3 shadow" style="background: var(--primary); border:none;">LANJUTKAN</button>
+            <button onclick="exitVisitorMode()" class="btn btn-link btn-sm mt-3 text-muted d-none w-100 text-center" id="btnExitVisitor">Kembali ke Dashboard</button>
+          </div>
+          
+          <div id="step-form" class="card visitor-card p-4 d-none animate-up border-0">
+            <h5 class="fw-800 mb-4 text-center text-success">Formulir Kunjungan</h5>
+            <div class="mb-3"><label class="small fw-bold text-secondary mb-1">Nama Lengkap</label><input type="text" id="guestNama" class="form-control rounded-3 py-2"></div>
+            <div class="mb-3"><label class="small fw-bold text-secondary mb-1">No. Telp</label><input type="text" id="guestPhone" class="form-control rounded-3 py-2" placeholder="0812xxx"></div>
+            <div class="mb-3"><label class="small fw-bold text-secondary mb-1">No. Visitor</label><input type="text" id="guestVisitorId" class="form-control rounded-3 py-2" placeholder="Nomor Kartu Visitor"></div>
+            <div class="mb-3"><label class="small fw-bold text-secondary mb-1">Perusahaan</label><input type="text" id="guestPerusahaan" class="form-control rounded-3 py-2"></div>
+            
+            <div class="position-relative mb-3">
+              <label class="small fw-bold text-secondary mb-1">Bertemu Staf</label>
+              <input type="text" id="guestBertemu" class="form-control rounded-3 py-2" placeholder="Ketik nama staf..." autocomplete="off" oninput="handleStaffSearch(this.value)">
+              <div id="staffSuggestions" class="list-group position-absolute w-100 shadow-lg d-none text-start" style="top: 70px; left: 0; z-index: 1050; border-radius: 12px; max-height: 200px; overflow-y: auto;"></div>
+            </div>
+            
+            <div class="row">
+              <div class="col-6 mb-3"><label class="small fw-bold text-secondary mb-1">Divisi</label><input type="text" id="guestDivisi" class="form-control rounded-3 bg-light"></div>
+              <div class="col-6 mb-3"><label class="small fw-bold text-secondary mb-1">Lantai</label><input type="text" id="guestLantai" class="form-control rounded-3 bg-light"></div>
+            </div>
+            <div class="mb-4"><label class="small fw-bold text-secondary mb-1">Keperluan</label><textarea id="guestKeperluan" class="form-control rounded-3" rows="2"></textarea></div>
+            <button onclick="submitCheckin()" class="btn btn-success btn-lg w-100 fw-bold rounded-4 py-3 shadow" style="background: var(--primary); border:none;">SUBMIT DATA</button>
+            <button onclick="resetVisitorView()" class="btn btn-link btn-sm w-100 text-muted mt-2">Batal</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loginPage" class="d-none min-vh-100 d-flex align-items-center justify-content-center p-3">
+    <div class="card p-4 p-md-5 w-100 shadow-lg border-0" style="max-width: 420px; border-radius: 28px;">
+      <div class="text-center mb-4">
+        <div class="bg-success text-white p-3 rounded-4 d-inline-flex mb-3 shadow"><i class="fa-solid fa-shield-halved fa-2x"></i></div>
+        <h3 class="fw-800 text-success">VMS EMP</h3>
+        <p class="text-secondary small">Masuk Portal Administrator</p>
+      </div>
+      <div class="mb-3">
+        <label class="small fw-bold text-secondary mb-1">ID Pengguna</label>
+        <input type="text" id="username" class="form-control py-3 rounded-3" placeholder="Username">
+      </div>
+      <div class="mb-4">
+        <label class="small fw-bold text-secondary mb-1">Kata Sandi</label>
+        <input type="password" id="password" class="form-control py-3 rounded-3" placeholder="Password">
+      </div>
+      <button onclick="handleLogin()" class="btn btn-success w-100 py-3 fw-bold rounded-3 shadow mb-3" style="background: var(--primary); border:none;">LOGIN SYSTEM</button>
+      <button onclick="backToDashboard()" class="btn btn-outline-secondary w-100 py-2 fw-bold rounded-3 border-0">Kembali ke Beranda</button>
+    </div>
+  </div>
+
+  <div id="mainApp" class="d-none">
+    <header class="mobile-header">
+      <div class="d-flex align-items-center gap-2">
+        <div class="bg-success text-white p-2 rounded-2 shadow-sm" style="width:32px; height:32px; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-shield-halved fa-sm"></i></div>
+        <span class="fw-800 text-success small">VMS EMP</span>
+      </div>
+      <button class="btn btn-light border-0" onclick="toggleSidebar()">
+        <i class="fa-solid fa-bars-staggered text-success"></i>
+      </button>
+    </header>
+
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="sidebar shadow-sm">
+      <div class="nav-brand">
+        <h5 class="d-flex align-items-center gap-2">
+          <div class="bg-success text-white p-2 rounded-3 shadow-sm" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-shield-halved fa-sm"></i></div>
+          <span>EMP <span style="color:var(--secondary); font-weight:600;">VMS</span></span>
+        </h5>
+      </div>
+      
+      <nav class="nav-group">
+        <div class="nav-item-custom active" onclick="showPage('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</div>
+        <div class="nav-item-custom" onclick="showPage('qr-station', this)"><i class="fa-solid fa-qrcode"></i> QR Station</div>
+        <div class="nav-item-custom admin-only" onclick="showPage('visitors', this)"><i class="fa-solid fa-address-book"></i> Daftar Tamu</div>
+        <hr class="my-3 opacity-10">
+        <div class="nav-item-custom public-only" onclick="goToLogin()" style="color: var(--primary);"><i class="fa-solid fa-right-to-bracket"></i> Login Admin</div>
+        <div class="nav-item-custom logout-item admin-only" onclick="logout()"><i class="fa-solid fa-power-off"></i> Keluar Sistem</div>
+      </nav>
+    </div>
+
+    <div class="main-content">
+      <div id="page-dashboard" class="animate-up">
+        <div class="enterprise-banner">
+          <div>
+            <h3 class="fw-800 mb-1">Visitor Dashboard</h3>
+            <p class="mb-0" style="color: rgba(255,255,255,0.85);">Monitoring Tamu Real-Time</p>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-4">
+            <div class="card card-kpi" style="border-left: 4px solid var(--primary);">
+              <p class="kpi-label">Tamu Hari Ini</p>
+              <h2 class="kpi-value" id="stat-total">0</h2>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card card-kpi" style="border-left: 4px solid var(--primary-light);">
+              <p class="kpi-label">Sedang Di Dalam</p>
+              <h2 class="kpi-value text-success" id="stat-active">0</h2>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card card-kpi" style="border-left: 4px solid #e2e8f0;">
+              <p class="kpi-label">Telah Keluar</p>
+              <h2 class="kpi-value text-muted" id="stat-done">0</h2>
+            </div>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm overflow-hidden mb-5">
+          <div class="p-4 border-bottom bg-light">
+            <h6 class="fw-800 mb-0 text-success"><i class="fa-solid fa-users me-2"></i>Daftar Tamu Aktif</h6>
+          </div>
+          <div class="p-4" id="dashboardContent"></div>
+        </div>
+      </div>
+
+      <div id="page-qr-station" class="d-none animate-up text-center">
+        <div class="card p-4 p-md-5 border-0 shadow-sm mx-auto" style="max-width: 600px; border-radius: 32px;">
+          <h2 class="fw-800 mb-2">Digital Registration</h2>
+          <p class="text-secondary mb-4 small">Pindai Kode QR untuk Registrasi Mandiri</p>
+          <div id="qrcode-container" class="bg-white p-3 rounded-4 shadow-sm border mx-auto mb-4" style="display: inline-block;">
+            <div id="qrcode" style="width: 200px; height: 200px;"></div>
+          </div>
+          <div class="modern-clock-widget text-center mx-auto">
+            <div id="liveClock" class="digital-clock">00:00:00</div>
+            <div id="liveDate" class="modern-date">-- -- ----</div>
+          </div>
+          <div class="mt-4"><button onclick="simulateScan()" class="btn btn-success rounded-pill px-4 py-2 fw-bold shadow">SIMULASI REGISTER TAMU</button></div>
+        </div>
+      </div>
+
+      <div id="page-visitors" class="d-none animate-up">
+        <div class="card border-0 shadow-sm overflow-hidden">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>PENGUNJUNG</th>
+                  <th class="text-center">NO. VISITOR</th>
+                  <th class="text-center">LANTAI</th>
+                  <th>TUJUAN STAF</th>
+                  <th class="text-center">STATUS</th>
+                  <th class="text-center">AKSI</th>
+                </tr>
+              </thead>
+              <tbody id="visitorTableBody" class="small"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var isVisitorMode = false;
+    var currentUser = null;
+    var dbVisitors = [];
+    var dbStaff = [];
+    var clockInterval = null;
+
+    function gasRun(name, ...args) {
+      return new Promise((resolve, reject) => {
+        if (typeof google !== 'undefined' && google?.script?.run) {
+          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args);
+        } else {
+          // Fallback / Standalone REST Runner
+          resolve([]);
+        }
+      });
+    }
+
+    function updateLiveClock() {
+      const now = new Date();
+      if (document.getElementById('liveClock')) document.getElementById('liveClock').innerText = now.toLocaleTimeString('id-ID', { hour12: false });
+      if (document.getElementById('liveDate')) document.getElementById('liveDate').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function checkLoginState() {
+      const savedSession = localStorage.getItem('vms_session');
+      if (savedSession) {
+        currentUser = JSON.parse(savedSession);
+        document.body.classList.add('logged-in');
+      } else {
+        document.body.classList.remove('logged-in');
+      }
+
+      if (isVisitorMode) {
+        document.getElementById('visitorView').classList.remove('d-none');
+        document.getElementById('loginPage').classList.add('d-none');
+        document.getElementById('mainApp').classList.add('d-none');
+      } else {
+        document.getElementById('mainApp').classList.remove('d-none');
+        document.getElementById('loginPage').classList.add('d-none');
+        document.getElementById('visitorView').classList.add('d-none');
+        showPage('qr-station');
+      }
+    }
+
+    function showPage(name, el) {
+      document.querySelectorAll('.nav-item-custom').forEach(n => n.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.querySelectorAll('[id^="page-"]').forEach(p => p.classList.add('d-none'));
+      document.getElementById('page-' + name).classList.remove('d-none');
+      if (name === 'qr-station') generateQr();
+    }
+
+    function goToLogin() {
+      document.getElementById('mainApp').classList.add('d-none');
+      document.getElementById('loginPage').classList.remove('d-none');
+    }
+
+    function backToDashboard() {
+      document.getElementById('loginPage').classList.add('d-none');
+      document.getElementById('mainApp').classList.remove('d-none');
+      showPage('dashboard');
+    }
+
+    function handleLogin() {
+      var u = document.getElementById('username').value.trim();
+      var p = document.getElementById('password').value.trim();
+      if (u === 'admin' && p === 'Demo2026!') {
+        currentUser = { fullname: 'Administrator' };
+        localStorage.setItem('vms_session', JSON.stringify(currentUser));
+        checkLoginState();
+      } else {
+        Swal.fire('Login Gagal', 'Username/Password salah', 'error');
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('vms_session');
+      currentUser = null;
+      checkLoginState();
+    }
+
+    function toggleSidebar() {
+      document.querySelector('.sidebar').classList.toggle('active');
+      document.querySelector('.sidebar-overlay').classList.toggle('active');
+    }
+
+    function simulateScan() { isVisitorMode = true; document.getElementById('btnExitVisitor').classList.remove('d-none'); checkLoginState(); }
+    function exitVisitorMode() { isVisitorMode = false; checkLoginState(); }
+    function resetVisitorView() { exitVisitorMode(); }
+
+    function generateQr() {
+      var q = document.getElementById("qrcode");
+      if (!q) return;
+      q.innerHTML = "";
+      new QRCode(q, { text: window.location.href, width: 200, height: 200, colorDark: "#064e3b" });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      checkLoginState();
+      setInterval(updateLiveClock, 1000);
+      updateLiveClock();
+    });
+  </script>
+</body>
+</html>
