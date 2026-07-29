@@ -35,7 +35,6 @@
       padding-top: var(--sat);
       padding-bottom: var(--sab);
       -webkit-font-smoothing: antialiased;
-      user-select: none;
     }
     
     @keyframes fadeInUp {
@@ -151,6 +150,7 @@
 
     .status-badge { padding: 6px 12px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; }
     .bg-soft-primary { background: #dcfce7; color: #059669; }
+    .bg-soft-danger { background: #fee2e2; color: #b91c1c; }
     .bg-soft-warning { background: #fef3c7; color: #b45309; }
 
     .modern-clock-widget {
@@ -188,6 +188,10 @@
     .public-only { display: block; }
     .logged-in .public-only { display: none !important; }
 
+    .superadmin-only { display: none !important; }
+    body.is-superadmin .superadmin-only { display: flex !important; }
+    body.is-superadmin div.superadmin-only { display: block !important; }
+
     @keyframes pulseAlert {
       0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
       70% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); }
@@ -195,6 +199,14 @@
     }
     .overtime-alert { animation: pulseAlert 2s infinite !important; border: 1px solid #fca5a5 !important; background-color: #fef2f2 !important; }
     .overtime-text { color: #dc2626 !important; }
+
+    .btn-checkout {
+      background: #fff; border: 1.5px solid #059669; color: #059669;
+      border-radius: 10px; padding: 6px 14px; font-weight: 700; font-size: 0.8rem; transition: all 0.3s;
+    }
+    .btn-checkout:hover { background: #059669; color: #fff; box-shadow: 0 5px 15px rgba(5, 150, 105, 0.2); }
+    .btn-icon-action { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e2e8f0; background: #fff; color: #64748b; transition: all 0.2s; }
+    .btn-icon-action:hover { background: #f8fafc; color: var(--primary); border-color: var(--primary-light); }
   </style>
 </head>
 <body>
@@ -299,10 +311,16 @@
         </h5>
       </div>
       
+      <div class="user-profile-nav d-none px-4 mb-3">
+         <p class="fw-800 small mb-0 text-truncate" id="userDisplayName">Super Admin</p>
+         <p class="text-muted mb-0" style="font-size: 10px; font-weight:700;">SECURITY DIV</p>
+      </div>
+
       <nav class="nav-group">
         <div class="nav-item-custom active" onclick="showPage('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</div>
         <div class="nav-item-custom" onclick="showPage('qr-station', this)"><i class="fa-solid fa-qrcode"></i> QR Station</div>
         <div class="nav-item-custom admin-only" onclick="showPage('visitors', this)"><i class="fa-solid fa-address-book"></i> Daftar Tamu</div>
+        <div class="nav-item-custom superadmin-only" onclick="showPage('summary', this)" style="border-left: 4px solid #f59e0b;"><i class="fa-solid fa-chart-line text-warning"></i> Executive Summary</div>
         <hr class="my-3 opacity-10">
         <div class="nav-item-custom public-only" onclick="goToLogin()" style="color: var(--primary);"><i class="fa-solid fa-right-to-bracket"></i> Login Admin</div>
         <div class="nav-item-custom logout-item admin-only" onclick="logout()"><i class="fa-solid fa-power-off"></i> Keluar Sistem</div>
@@ -320,13 +338,13 @@
 
         <div class="row g-3 mb-4">
           <div class="col-md-4">
-            <div class="card card-kpi" style="border-left: 4px solid var(--primary);">
+            <div class="card card-kpi" onclick="filterChartByStatus('Semua')" style="border-left: 4px solid var(--primary); cursor: pointer;">
               <p class="kpi-label">Tamu Hari Ini</p>
               <h2 class="kpi-value" id="stat-total">0</h2>
             </div>
           </div>
           <div class="col-md-4">
-            <div class="card card-kpi" style="border-left: 4px solid var(--primary-light);">
+            <div class="card card-kpi" onclick="filterChartByStatus('Hadir')" style="border-left: 4px solid var(--primary-light); cursor: pointer;">
               <p class="kpi-label">Sedang Di Dalam</p>
               <h2 class="kpi-value text-success" id="stat-active">0</h2>
             </div>
@@ -335,6 +353,17 @@
             <div class="card card-kpi" style="border-left: 4px solid #e2e8f0;">
               <p class="kpi-label">Telah Keluar</p>
               <h2 class="kpi-value text-muted" id="stat-done">0</h2>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mb-4">
+          <div class="col-12">
+            <div class="card border-0 shadow-sm p-4">
+              <h6 class="fw-800 mb-3 text-success"><i class="fa-solid fa-chart-column me-2"></i>Kunjungan Tamu Per Lantai</h6>
+              <div style="position: relative; height: 260px; width: 100%;">
+                <canvas id="floorChart"></canvas>
+              </div>
             </div>
           </div>
         </div>
@@ -351,14 +380,15 @@
         <div class="card p-4 p-md-5 border-0 shadow-sm mx-auto" style="max-width: 600px; border-radius: 32px;">
           <h2 class="fw-800 mb-2">Digital Registration</h2>
           <p class="text-secondary mb-4 small">Pindai Kode QR untuk Registrasi Mandiri</p>
+          
           <div id="qrcode-container" class="bg-white p-3 rounded-4 shadow-sm border mx-auto mb-4" style="display: inline-block;">
             <div id="qrcode" style="width: 200px; height: 200px;"></div>
           </div>
+          
           <div class="modern-clock-widget text-center mx-auto">
             <div id="liveClock" class="digital-clock">00:00:00</div>
             <div id="liveDate" class="modern-date">-- -- ----</div>
           </div>
-          <div class="mt-4"><button onclick="simulateScan()" class="btn btn-success rounded-pill px-4 py-2 fw-bold shadow">SIMULASI REGISTER TAMU</button></div>
         </div>
       </div>
 
@@ -372,12 +402,45 @@
                   <th class="text-center">NO. VISITOR</th>
                   <th class="text-center">LANTAI</th>
                   <th>TUJUAN STAF</th>
+                  <th class="text-center">NO. TELEPON</th>
+                  <th>KEPERLUAN</th>
+                  <th class="text-center">WAKTU (IN/OUT)</th>
                   <th class="text-center">STATUS</th>
                   <th class="text-center">AKSI</th>
                 </tr>
               </thead>
               <tbody id="visitorTableBody" class="small"></tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-summary" class="d-none animate-up">
+        <div class="d-flex align-items-center mb-3 gap-3">
+           <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-4"><i class="fa-solid fa-chart-line fa-lg"></i></div>
+           <div>
+             <h3 class="fw-800 mb-0" style="color: var(--corporate-green);">Executive Summary & Analytics</h3>
+             <p class="text-secondary mb-0 small">Analisis riwayat kunjungan tamu</p>
+           </div>
+        </div>
+        <div class="row g-3 mb-4">
+          <div class="col-md-4">
+            <div class="card p-4 border-0 shadow-sm text-center">
+              <p class="small fw-bold text-secondary mb-1">TAMU KEMARIN</p>
+              <h1 class="fw-800 text-success mb-0" id="sumDaily">0</h1>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card p-4 border-0 shadow-sm text-center">
+              <p class="small fw-bold text-secondary mb-1">TAMU MINGGU INI</p>
+              <h1 class="fw-800 text-primary mb-0" id="sumWeekly">0</h1>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card p-4 border-0 shadow-sm text-center">
+              <p class="small fw-bold text-secondary mb-1">TAMU BULAN INI</p>
+              <h1 class="fw-800 mb-0" style="color: #8b5cf6;" id="sumMonthly">0</h1>
+            </div>
           </div>
         </div>
       </div>
@@ -389,32 +452,35 @@
     var currentUser = null;
     var dbVisitors = [];
     var dbStaff = [];
-    var clockInterval = null;
+    var floorChart = null;
 
     function gasRun(name, ...args) {
       return new Promise((resolve, reject) => {
         if (typeof google !== 'undefined' && google?.script?.run) {
           google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args);
         } else {
-          // Fallback / Standalone REST Runner
           resolve([]);
         }
       });
     }
 
-    function updateLiveClock() {
-      const now = new Date();
-      if (document.getElementById('liveClock')) document.getElementById('liveClock').innerText = now.toLocaleTimeString('id-ID', { hour12: false });
-      if (document.getElementById('liveDate')) document.getElementById('liveDate').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    }
-
     function checkLoginState() {
+      // PERBAIKAN PENTING: Otomatis deteksi parameter ?v=1 dari URL HP Tamu
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('v') === '1') {
+        isVisitorMode = true;
+      }
+
       const savedSession = localStorage.getItem('vms_session');
       if (savedSession) {
         currentUser = JSON.parse(savedSession);
         document.body.classList.add('logged-in');
+        if (currentUser.role && currentUser.role.toUpperCase() === 'SUPER ADMIN') {
+          document.body.classList.add('is-superadmin');
+        }
       } else {
         document.body.classList.remove('logged-in');
+        document.body.classList.remove('is-superadmin');
       }
 
       if (isVisitorMode) {
@@ -427,6 +493,33 @@
         document.getElementById('visitorView').classList.add('d-none');
         showPage('qr-station');
       }
+    }
+
+    function generateQr() {
+      var q = document.getElementById("qrcode");
+      if (!q) return;
+      q.innerHTML = "";
+      
+      // PERBAIKAN PENTING: Kunci paksa URL QR memuat ?v=1
+      var baseUrl = window.location.origin + window.location.pathname;
+      var targetUrl = baseUrl + (baseUrl.endsWith('/') ? '' : '/') + "?v=1";
+      
+      setTimeout(() => {
+        new QRCode(q, { 
+          text: targetUrl, 
+          width: 200, 
+          height: 200, 
+          colorDark: "#064e3b",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      }, 200);
+    }
+
+    function updateLiveClock() {
+      const now = new Date();
+      if (document.getElementById('liveClock')) document.getElementById('liveClock').innerText = now.toLocaleTimeString('id-ID', { hour12: false });
+      if (document.getElementById('liveDate')) document.getElementById('liveDate').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     }
 
     function showPage(name, el) {
@@ -452,11 +545,11 @@
       var u = document.getElementById('username').value.trim();
       var p = document.getElementById('password').value.trim();
       if (u === 'admin' && p === 'Demo2026!') {
-        currentUser = { fullname: 'Administrator' };
+        currentUser = { fullname: 'Administrator', role: 'SUPER ADMIN' };
         localStorage.setItem('vms_session', JSON.stringify(currentUser));
         checkLoginState();
       } else {
-        Swal.fire('Login Gagal', 'Username/Password salah', 'error');
+        Swal.fire('Login Gagal', 'Username atau Password salah!', 'error');
       }
     }
 
@@ -471,16 +564,98 @@
       document.querySelector('.sidebar-overlay').classList.toggle('active');
     }
 
-    function simulateScan() { isVisitorMode = true; document.getElementById('btnExitVisitor').classList.remove('d-none'); checkLoginState(); }
-    function exitVisitorMode() { isVisitorMode = false; checkLoginState(); }
-    function resetVisitorView() { exitVisitorMode(); }
-
-    function generateQr() {
-      var q = document.getElementById("qrcode");
-      if (!q) return;
-      q.innerHTML = "";
-      new QRCode(q, { text: window.location.href, width: 200, height: 200, colorDark: "#064e3b" });
+    function handleSmartSearch(val) {
+      const suggestionBox = document.getElementById('searchSuggestions');
+      document.getElementById('selectedCheckoutPhone').value = "";
+      if (!val || val.trim().length < 1) { suggestionBox.classList.add('d-none'); return; }
+      
+      const searchStr = val.toLowerCase().trim();
+      const matches = dbVisitors.filter(v => v.status === 'Hadir' && v.nama.toLowerCase().includes(searchStr));
+      let html = '';
+      if (matches.length > 0) {
+        matches.forEach(m => {
+          html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-success border-bottom" onclick="selectSuggestion('${m.nama}', '${m.telepon}')">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-2 text-danger"></i> Checkout: ${m.nama}
+                   </button>`;
+        });
+      }
+      html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-primary bg-light" onclick="selectSuggestionNew()">
+                <i class="fa-solid fa-user-plus me-2"></i> Tamu Baru: Lanjut Check-in
+               </button>`;
+      suggestionBox.innerHTML = html;
+      suggestionBox.classList.remove('d-none');
     }
+
+    function handleStaffSearch(val) {
+      const suggestionBox = document.getElementById('staffSuggestions');
+      if (!val || val.trim().length < 2) { suggestionBox.classList.add('d-none'); return; }
+      const searchStr = val.toLowerCase().trim();
+      const matches = dbStaff.filter(s => s.nama.toLowerCase().includes(searchStr));
+      let html = '';
+      if (matches.length > 0) {
+        matches.forEach(m => {
+          html += `<button type="button" class="list-group-item list-group-item-action py-2 fw-bold text-success border-bottom" onclick="selectStaffSuggestion('${m.nama}', '${m.divisi}', '${m.lantai}')">
+                    <i class="fa-solid fa-user-tie me-2 text-primary"></i> ${m.nama}
+                    <span class="text-muted small fw-normal d-block mt-1">${m.divisi} | Lt. ${m.lantai}</span>
+                   </button>`;
+        });
+        suggestionBox.innerHTML = html;
+        suggestionBox.classList.remove('d-none');
+      } else {
+        suggestionBox.classList.add('d-none');
+      }
+    }
+
+    function selectStaffSuggestion(nama, divisi, lantai) {
+      document.getElementById('guestBertemu').value = nama;
+      document.getElementById('guestDivisi').value = divisi;
+      document.getElementById('guestLantai').value = lantai;
+      document.getElementById('staffSuggestions').classList.add('d-none');
+    }
+
+    function selectSuggestion(nama, phone) {
+      document.getElementById('guestInitialInput').value = nama;
+      document.getElementById('selectedCheckoutPhone').value = phone;
+      document.getElementById('searchSuggestions').classList.add('d-none');
+      handleGuestSubmit();
+    }
+
+    function selectSuggestionNew() {
+      document.getElementById('searchSuggestions').classList.add('d-none');
+      handleGuestSubmit();
+    }
+
+    function handleGuestSubmit() {
+      var initialInput = document.getElementById('guestInitialInput').value.trim();
+      if (!initialInput) return Swal.fire('Perhatian', 'Silakan ketik nama Anda.', 'warning');
+      document.getElementById('step-scan').classList.add('d-none');
+      document.getElementById('step-form').classList.remove('d-none');
+      document.getElementById('guestNama').value = initialInput;
+    }
+
+    function submitCheckin() {
+      var p = { 
+        id: document.getElementById('guestPhone').value.trim(), 
+        nama: document.getElementById('guestNama').value.trim(), 
+        visitorId: document.getElementById('guestVisitorId').value, 
+        perusahaan: document.getElementById('guestPerusahaan').value, 
+        bertemu: document.getElementById('guestBertemu').value, 
+        lantai: document.getElementById('guestLantai').value, 
+        keperluan: document.getElementById('guestKeperluan').value,
+        divisi: document.getElementById('guestDivisi').value
+      };
+      if (!p.nama || !p.id || !p.visitorId || !p.lantai) return Swal.fire('Data Kurang', 'Nama, No. Telp, No. Visitor, dan Lantai wajib diisi.', 'warning');
+      Swal.fire('Registrasi Berhasil', 'Selamat Datang Mr./Ms. ' + p.nama, 'success').then(resetVisitorView);
+    }
+
+    function resetVisitorView() { 
+      isVisitorMode = false;
+      document.getElementById('step-scan').classList.remove('d-none'); 
+      document.getElementById('step-form').classList.add('d-none'); 
+      checkLoginState(); 
+    }
+
+    function exitVisitorMode() { resetVisitorView(); }
 
     document.addEventListener('DOMContentLoaded', () => {
       checkLoginState();
