@@ -236,7 +236,7 @@
             </div>
             
             <div class="position-relative mb-4">
-              <input type="text" id="guestInitialInput" class="form-control form-control-lg text-center fs-4 py-3 rounded-4" placeholder="Ketik Nama Anda..." autocomplete="off" onkeyup="handleSmartSearch(this.value)">
+              <input type="text" id="guestInitialInput" class="form-control form-control-lg text-center fs-4 py-3 rounded-4" placeholder="Ketik Nama Anda..." autocomplete="off" oninput="handleSmartSearch(this.value)" onfocus="handleInputFocus(this.value)">
               <div id="searchSuggestions" class="list-group position-absolute w-100 shadow-lg d-none text-start" style="top: 100%; left: 0; z-index: 1000; border-radius: 12px; overflow: hidden; margin-top: 5px;"></div>
             </div>
             
@@ -482,13 +482,21 @@
     }
 
     async function gasRun(name, ...args) {
+      // 1. Mode GAS Web App Asli
       if (typeof google !== 'undefined' && google?.script?.run) {
         return new Promise((resolve, reject) => {
           google.script.run
             .withSuccessHandler(resolve)
-            .withFailureHandler(reject)[name](...args);
+            .withFailureHandler((err) => {
+              console.error("GAS Native Error (" + name + "):", err);
+              resolve({ success: false, message: err?.message || String(err) });
+            })[name](...args);
         });
       }
+
+      // 2. Mode External HTTP Gateway (APK / Vercel Web)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 detik network timeout
 
       try {
         const response = await fetch(GAS_URL, {
@@ -497,15 +505,25 @@
           body: new URLSearchParams({
             action: name,
             payload: JSON.stringify(args)
-          })
+          }),
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
-        if (!response.ok) throw new Error("HTTP error " + response.status);
+        if (!response.ok) {
+          throw new Error("HTTP Error " + response.status + ": Koneksi ke server Google terganggu.");
+        }
         const res = await response.json();
         return res;
       } catch (err) {
+        clearTimeout(timeoutId);
         console.error("gasRun Error (" + name + "):", err);
-        return [];
+        return { 
+          success: false, 
+          message: err.name === 'AbortError' 
+            ? "Waktu permintaan habis (timeout). Periksa koneksi internet." 
+            : "Koneksi backend gagal: " + (err.message || String(err)) 
+        };
       }
     }
 
@@ -742,15 +760,34 @@
       }
     }
 
+    var isLoadingVisitors = false;
+
     async function loadVisitorModeData() {
+      isLoadingVisitors = true;
       try {
-        const staffRes = await gasRun('getStaffData');
-        if (Array.isArray(staffRes)) dbStaff = staffRes;
+        // Ambil data staf dan data pengunjung secara paralel (tidak antre berurutan)
+        const [visitorRes, staffRes] = await Promise.all([
+          gasRun('getVisitors'),
+          gasRun('getStaffData')
+        ]);
         
-        const visitorRes = await gasRun('getVisitors');
-        if (Array.isArray(visitorRes)) dbVisitors = visitorRes;
+        if (Array.isArray(visitorRes)) {
+          dbVisitors = visitorRes;
+        }
+        if (Array.isArray(staffRes)) {
+          dbStaff = staffRes;
+        }
+
+        // Jika pengunjung sudah terlanjur mengetik namanya sebelum data selesai diunduh,
+        // picu pencarian otomatis seketika agar daftar checkout langsung muncul!
+        const currentInput = document.getElementById('guestInitialInput');
+        if (currentInput && currentInput.value.trim().length > 0) {
+          handleSmartSearch(currentInput.value);
+        }
       } catch (e) {
         console.error("Gagal memuat data staf/tamu:", e);
+      } finally {
+        isLoadingVisitors = false;
       }
     }
 
@@ -816,24 +853,70 @@
     var isCheckoutInProgress = false;
     var isCheckinInProgress = false;
 
+    function handleInputFocus(val) {
+      if (val && val.trim().length > 0) {
+        handleSmartSearch(val);
+      }
+    }
+
     function handleSmartSearch(val) {
       const suggestionBox = document.getElementById('searchSuggestions');
-      if (!val || val.trim().length < 1) { suggestionBox.classList.add('d-none'); return; }
+      if (!suggestionBox) return;
+
+      if (!val || val.trim().length < 1) { 
+        suggestionBox.classList.add('d-none'); 
+        return; 
+      }
       
       const searchStr = val.toLowerCase().trim();
-      const matches = dbVisitors.filter(v => v.status === 'Hadir' && v.nama.toLowerCase().includes(searchStr));
+
+      // Jika data tamu masih dalam proses sinkronisasi dari server Google Sheets
+      if (isLoadingVisitors && dbVisitors.length === 0) {
+        suggestionBox.innerHTML = `
+          <div class="list-group-item py-3 text-center text-muted small bg-light">
+            <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+            Menyinkronkan data tamu aktif dari server...
+          </div>
+          <button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-primary" onclick="selectSuggestionNew()">
+            <i class="fa-solid fa-user-plus me-2"></i> Tamu Baru: Lanjut Formulir Check-in
+          </button>
+        `;
+        suggestionBox.classList.remove('d-none');
+        return;
+      }
+
+      // Pencocokan fleksibel: abaikan perbedaan huruf besar/kecil dan spasi pada status maupun nama
+      const matches = dbVisitors.filter(v => {
+        const statusClean = String(v.status || '').trim().toLowerCase();
+        const namaClean = String(v.nama || '').trim().toLowerCase();
+        const visitorIdClean = String(v.visitorId || '').trim().toLowerCase();
+        
+        const isHadir = (statusClean === 'hadir');
+        const isMatch = namaClean.includes(searchStr) || visitorIdClean.includes(searchStr);
+        return isHadir && isMatch;
+      });
+
       let html = '';
       if (matches.length > 0) {
         matches.forEach(m => {
-          const safeName = m.nama.replace(/'/g, "\\'");
+          const safeName = String(m.nama).replace(/'/g, "\\'");
           html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-success border-bottom" onclick="executeVisitorCheckout(${m.row_index}, '${safeName}')">
-                    <i class="fa-solid fa-arrow-right-from-bracket me-2 text-danger"></i> Check-out Sekarang: ${m.nama} (V-${m.visitorId})
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <i class="fa-solid fa-arrow-right-from-bracket me-2 text-danger"></i>
+                        <span>Check-out: <b>${m.nama}</b></span>
+                      </div>
+                      <span class="badge bg-light text-secondary border">V-${m.visitorId}</span>
+                    </div>
+                    <div class="small text-muted fw-normal ms-4">Masuk: ${m.masuk || '--:--'} | Bertemu: ${m.bertemu || '-'}</div>
                    </button>`;
         });
       }
+      
       html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-primary bg-light" onclick="selectSuggestionNew()">
                 <i class="fa-solid fa-user-plus me-2"></i> Tamu Baru: Lanjut Formulir Check-in
                </button>`;
+      
       suggestionBox.innerHTML = html;
       suggestionBox.classList.remove('d-none');
     }
@@ -940,8 +1023,6 @@
     }
 
     async function submitCheckin() {
-      if (isCheckinInProgress) return;
-
       var p = { 
         id: document.getElementById('guestPhone').value.trim(), 
         nama: document.getElementById('guestNama').value.trim(), 
@@ -957,59 +1038,73 @@
         return Swal.fire('Data Kurang', 'Nama, No. Telp, No. Visitor, dan Lantai wajib diisi.', 'warning');
       }
 
-      isCheckinInProgress = true;
       document.getElementById('fullPageLoader').style.display = 'flex';
 
       try {
         const res = await gasRun('saveCheckin', p);
         document.getElementById('fullPageLoader').style.display = 'none';
+        
+        // Verifikasi ketat terhadap status respons backend
         if (res && res.success) {
-          await Swal.fire('Registrasi Berhasil', 'Selamat Datang ' + p.nama, 'success');
+          await Swal.fire('Registrasi Berhasil', 'Selamat Datang Mr./Ms. ' + p.nama, 'success');
+          // Reset kolom input agar siap untuk kunjungan berikutnya
+          document.getElementById('guestPhone').value = '';
+          document.getElementById('guestNama').value = '';
+          document.getElementById('guestVisitorId').value = '';
+          document.getElementById('guestPerusahaan').value = '';
+          document.getElementById('guestBertemu').value = '';
+          document.getElementById('guestKeperluan').value = '';
           resetVisitorView();
         } else {
-          Swal.fire('Gagal', res?.message || 'Gagal menyimpan check-in.', 'error');
+          Swal.fire('Gagal Menyimpan', res?.message || 'Server menolak data pendaftaran.', 'error');
         }
       } catch (err) {
         document.getElementById('fullPageLoader').style.display = 'none';
-        Swal.fire('Error', 'Gagal menyimpan data.', 'error');
-      } finally {
-        isCheckinInProgress = false;
+        Swal.fire('Error Jaringan', 'Gagal menghubungi server database: ' + (err?.message || err), 'error');
       }
     }
 
-    async function adminCheckout(rowIndex) {
-      if (isCheckoutInProgress) return;
-
-      const visitor = dbVisitors.find(v => v.row_index == rowIndex);
-      const visitorName = visitor ? ` (${visitor.nama})` : '';
+    async function adminCheckout(targetIdentifier) {
+      const visitor = dbVisitors.find(v => v.row_index == targetIdentifier || v.telepon == targetIdentifier);
+      const displayName = visitor ? ` "${visitor.nama}"` : '';
 
       Swal.fire({
-        title: 'Checkout Tamu?',
-        text: `Apakah Anda yakin ingin menyelesaikan kunjungan tamu${visitorName}?`,
+        title: 'Konfirmasi Checkout',
+        text: `Apakah Anda yakin ingin menyelesaikan kunjungan tamu${displayName}?`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#059669',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Ya, Checkout!',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Ya, Checkout Sekarang',
         cancelButtonText: 'Batal'
       }).then(async (result) => {
         if (result.isConfirmed) {
-          isCheckoutInProgress = true;
           document.getElementById('fullPageLoader').style.display = 'flex';
           try {
-            const res = await gasRun('processScan', rowIndex);
+            const rowIndex = visitor ? visitor.row_index : targetIdentifier;
+            const phoneBackup = visitor ? visitor.telepon : '';
+            
+            // Panggil endpoint khusus checkoutVisitor
+            const res = await gasRun('checkoutVisitor', rowIndex, phoneBackup);
             document.getElementById('fullPageLoader').style.display = 'none';
+
             if (res && res.success && res.action === 'checkout') {
-              await Swal.fire('Berhasil', `Tamu ${res.nama || ''} telah di-checkout.`, 'success');
+              // Pembaruan status lokal seketika (Optimistic UI)
+              if (visitor) {
+                visitor.status = 'Selesai';
+                visitor.keluar = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                renderStats();
+                renderTable();
+              }
+              await Swal.fire('Check-out Sukses', res.message || `Tamu ${res.nama || ''} telah keluar.`, 'success');
               await loadDashboardData();
             } else {
-              Swal.fire('Perhatian', res?.message || 'Gagal memproses checkout. Status tamu mungkin sudah selesai.', 'warning');
+              // Jika backend menolak, tampilkan peringatan sebenarnya (BUKAN pesan sukses palsu)
+              Swal.fire('Gagal Checkout', res?.message || 'Data tamu tidak dapat di-checkout.', 'warning');
             }
           } catch (err) {
             document.getElementById('fullPageLoader').style.display = 'none';
-            Swal.fire('Error', 'Gagal memproses checkout.', 'error');
-          } finally {
-            isCheckoutInProgress = false;
+            Swal.fire('Error Sistem', 'Terjadi kesalahan saat memproses checkout.', 'error');
           }
         }
       });
