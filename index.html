@@ -328,6 +328,10 @@
             <h3 class="fw-800 mb-1">Visitor Dashboard</h3>
             <p class="mb-0" style="color: rgba(255,255,255,0.85);">Monitoring Tamu Real-Time</p>
           </div>
+          <button type="button" onclick="forceSyncData()" class="btn btn-light btn-sm fw-bold text-success rounded-3 shadow-sm px-3 py-2 d-flex align-items-center gap-2">
+            <i class="fa-solid fa-arrows-rotate" id="syncIcon"></i>
+            <span>Sinkronisasi</span>
+          </button>
         </div>
 
         <div class="row g-3 mb-4">
@@ -1218,6 +1222,35 @@
     }
 
     function exitVisitorMode() { resetVisitorView(); }
+
+    async function forceSyncData() {
+      const syncIcon = document.getElementById('syncIcon');
+      if (syncIcon) syncIcon.classList.add('fa-spin');
+      
+      try {
+        localStorage.removeItem('vms_visitors_cache');
+        const freshData = await gasRun('getVisitors', true);
+        if (Array.isArray(freshData)) {
+          dbVisitors = freshData;
+          try {
+            localStorage.setItem('vms_visitors_cache', JSON.stringify(freshData));
+          } catch (e) {}
+          renderStats();
+          renderTable();
+          Swal.fire({
+            icon: 'success',
+            title: 'Tersinkronisasi',
+            text: 'Data dashboard berhasil disinkronkan langsung dari Google Sheets.',
+            timer: 1500,
+            showConfirmButton: false
+          });
+        }
+      } catch (err) {
+        Swal.fire('Gagal', 'Gagal menyinkronkan data: ' + err.toString(), 'error');
+      } finally {
+        if (syncIcon) syncIcon.classList.remove('fa-spin');
+      }
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
       checkLoginState();
