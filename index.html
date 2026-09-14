@@ -919,7 +919,8 @@
       if (matches.length > 0) {
         matches.forEach(m => {
           const safeName = String(m.nama).replace(/'/g, "\\'");
-          html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-success border-bottom" onclick="executeVisitorCheckout(${m.row_index}, '${safeName}')">
+          const safePhone = String(m.telepon || '').replace(/'/g, "\\'");
+          html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-success border-bottom" onclick="executeVisitorCheckout(${m.row_index}, '${safeName}', '${safePhone}')">
                     <div class="d-flex justify-content-between align-items-center">
                       <div>
                         <i class="fa-solid fa-arrow-right-from-bracket me-2 text-danger"></i>
@@ -967,7 +968,7 @@
       document.getElementById('staffSuggestions').classList.add('d-none');
     }
 
-    async function executeVisitorCheckout(rowIndex, nama) {
+    async function executeVisitorCheckout(rowIndex, nama, phone) {
       document.getElementById('searchSuggestions').classList.add('d-none');
       if (isCheckoutInProgress) return;
 
@@ -986,9 +987,18 @@
         isCheckoutInProgress = true;
         document.getElementById('fullPageLoader').style.display = 'flex';
         try {
-          const res = await gasRun('processScan', rowIndex);
+          // Panggil endpoint checkoutVisitor dengan nomor baris dan backup nomor telepon
+          const res = await gasRun('checkoutVisitor', rowIndex, phone || '');
           document.getElementById('fullPageLoader').style.display = 'none';
+          
           if (res && res.success && res.action === 'checkout') {
+            // Perbarui status lokal seketika agar nama tamu tidak muncul lagi di pencarian
+            const target = dbVisitors.find(v => v.row_index == rowIndex || (phone && v.telepon == phone));
+            if (target) {
+              target.status = 'Selesai';
+            }
+            document.getElementById('guestInitialInput').value = '';
+
             await Swal.fire('Check-out Berhasil', `Terima kasih atas kunjungan Anda, ${res.nama || nama}!`, 'success');
             resetVisitorView();
           } else {
@@ -1013,7 +1023,7 @@
       if (!initialInput) return Swal.fire('Perhatian', 'Silakan ketik nama Anda.', 'warning');
 
       // Proteksi cerdas: periksa apakah nama ini sudah aktif di dalam gedung
-      const activeMatch = dbVisitors.find(v => v.status === 'Hadir' && v.nama.toLowerCase().trim() === initialInput.toLowerCase());
+      const activeMatch = dbVisitors.find(v => String(v.status || '').trim().toLowerCase() === 'hadir' && String(v.nama || '').toLowerCase().trim() === initialInput.toLowerCase());
       if (activeMatch) {
         Swal.fire({
           title: 'Tamu Sudah Terdaftar',
@@ -1026,7 +1036,7 @@
           cancelButtonText: 'Daftar Kunjungan Baru'
         }).then((res) => {
           if (res.isConfirmed) {
-            executeVisitorCheckout(activeMatch.row_index, activeMatch.nama);
+            executeVisitorCheckout(activeMatch.row_index, activeMatch.nama, activeMatch.telepon);
           } else if (res.dismiss === Swal.DismissReason.cancel) {
             document.getElementById('step-scan').classList.add('d-none');
             document.getElementById('step-form').classList.remove('d-none');
