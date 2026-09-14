@@ -482,7 +482,7 @@
     }
 
     async function gasRun(name, ...args) {
-      // 1. Mode GAS Web App Asli (Jika dibuka di script.google.com)
+      // 1. Mode GAS Web App Asli (Jika dibuka langsung di dalam lingkungan Google Script)
       if (typeof google !== 'undefined' && google?.script?.run) {
         return new Promise((resolve) => {
           google.script.run
@@ -494,54 +494,78 @@
         });
       }
 
-      // 2. Mode External HTTP Gateway (Vercel Web / APK Android)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // Batas aman 12 detik
+      // 2. Eksekutor HTTP Gateway Adaptif (Toleransi Cold-Start Apps Script hingga 40 detik)
+      const executeHttpRequest = async (method) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 40000); // 40 detik aman untuk cold start Google Apps Script
 
-      // Bedakan metode: Baca data menggunakan GET (anti-404, sangat cepat); Simpan data menggunakan POST
+        try {
+          let response;
+          if (method === 'GET') {
+            const params = new URLSearchParams({
+              action: name,
+              payload: JSON.stringify(args),
+              _t: Date.now().toString()
+            });
+            response = await fetch(`${GAS_URL}?${params.toString()}`, {
+              method: 'GET',
+              signal: controller.signal
+            });
+          } else {
+            response = await fetch(GAS_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                action: name,
+                payload: JSON.stringify(args)
+              }),
+              signal: controller.signal
+            });
+          }
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: Server Google menolak permintaan.`);
+          }
+
+          const rawText = await response.text();
+          
+          // Deteksi apakah respons berupa HTML (terjadi jika Code.gs di Apps Script belum di-deploy ulang ke versi baru)
+          if (rawText.trim().startsWith('<') || rawText.trim().startsWith('<!DOCTYPE')) {
+            throw new Error("RESPONSE_IS_HTML");
+          }
+
+          return JSON.parse(rawText);
+        } catch (err) {
+          clearTimeout(timeoutId);
+          throw err;
+        }
+      };
+
       const readActions = ['getVisitors', 'getStaffData', 'getSummaryReport', 'getScriptUrl'];
       const isReadOperation = readActions.includes(name);
 
       try {
-        let response;
         if (isReadOperation) {
-          // Bangun URL GET dengan anti-caching timestamp (_t)
-          const params = new URLSearchParams({
-            action: name,
-            payload: JSON.stringify(args),
-            _t: Date.now().toString()
-          });
-          response = await fetch(`${GAS_URL}?${params.toString()}`, {
-            method: 'GET',
-            signal: controller.signal
-          });
+          try {
+            // Prioritas 1: Jalankan via GET berkecepatan tinggi
+            return await executeHttpRequest('GET');
+          } catch (getErr) {
+            // Prioritas 2: Jika GET gagal atau mengembalikan HTML, otomatis beralih ke POST
+            console.warn(`[gasRun] GET ${name} fallback ke POST (${getErr.message})`);
+            return await executeHttpRequest('POST');
+          }
         } else {
-          // Mutasi data (Check-in, Check-out, Edit) menggunakan POST
-          response = await fetch(GAS_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              action: name,
-              payload: JSON.stringify(args)
-            }),
-            signal: controller.signal
-          });
+          // Mutasi data (Checkin, Checkout, Update) selalu menggunakan POST
+          return await executeHttpRequest('POST');
         }
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          throw new Error("HTTP " + response.status + ": Server Google belum merespons.");
-        }
-        const res = await response.json();
-        return res;
-      } catch (err) {
-        clearTimeout(timeoutId);
-        console.error("gasRun Error (" + name + "):", err);
+      } catch (finalErr) {
+        console.error("gasRun Error (" + name + "):", finalErr);
         return { 
           success: false, 
-          message: err.name === 'AbortError' 
-            ? "Waktu permintaan habis (timeout). Server sedang sibuk." 
-            : "Koneksi gagal: " + (err.message || String(err)) 
+          message: finalErr.name === 'AbortError' 
+            ? "Server Google sedang cold-start (waktu habis). Silakan muat ulang halaman." 
+            : "Koneksi backend gagal: " + (finalErr.message || String(finalErr)) 
         };
       }
     }
