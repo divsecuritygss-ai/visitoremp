@@ -922,15 +922,38 @@
       showPage('dashboard');
     }
 
-    function handleLogin() {
+    async function handleLogin() {
       var u = document.getElementById('username').value.trim();
       var p = document.getElementById('password').value.trim();
-      if (u === 'admin' && p === 'Demo2026!') {
-        currentUser = { fullname: 'Administrator' };
-        localStorage.setItem('vms_session', JSON.stringify(currentUser));
-        checkLoginState();
-      } else {
-        Swal.fire('Login Gagal', 'Username atau Password salah!', 'error');
+      
+      if (!u || !p) {
+        return Swal.fire('Perhatian', 'Username dan Password wajib diisi.', 'warning');
+      }
+
+      document.getElementById('fullPageLoader').style.display = 'flex';
+      try {
+        const res = await gasRun('loginUser', u, p);
+        document.getElementById('fullPageLoader').style.display = 'none';
+
+        if (res && res.success && res.user) {
+          currentUser = res.user;
+          localStorage.setItem('vms_session', JSON.stringify(currentUser));
+          document.getElementById('username').value = '';
+          document.getElementById('password').value = '';
+          await Swal.fire({
+            icon: 'success',
+            title: 'Login Berhasil',
+            text: `Selamat datang, ${currentUser.fullname}!`,
+            timer: 1500,
+            showConfirmButton: false
+          });
+          checkLoginState();
+        } else {
+          Swal.fire('Login Gagal', res?.message || 'Username atau Password salah!', 'error');
+        }
+      } catch (err) {
+        document.getElementById('fullPageLoader').style.display = 'none';
+        Swal.fire('Error Sistem', 'Terjadi kesalahan saat memverifikasi login.', 'error');
       }
     }
 
