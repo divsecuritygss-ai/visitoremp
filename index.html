@@ -661,7 +661,7 @@
           <td class="text-center">
             <div class="admin-only align-items-center justify-content-center gap-2">
               <button class="btn-icon-action" onclick="openEditModal(${x.row_index})" title="Edit Data"><i class="fa-solid fa-pen-to-square"></i></button>
-              ${hadir ? `<button class="btn-checkout" onclick="adminCheckout('${x.telepon}')">Checkout</button>` : `<i class="fa-solid fa-circle-check text-success fa-lg"></i>`}
+              ${hadir ? `<button class="btn-checkout" onclick="adminCheckout(${x.row_index})">Checkout</button>` : `<i class="fa-solid fa-circle-check text-success fa-lg"></i>`}
             </div>
             <div class="public-only">
               ${hadir ? '<span class="badge bg-light text-dark">Sesi Aktif</span>' : '<i class="fa-solid fa-check-circle text-success"></i>'}
@@ -681,7 +681,7 @@
               <div class="text-end">
                 <p class="mb-0 fw-bold small ${ot ? 'text-danger' : 'text-success'}">Masuk: ${jamMasuk}</p>
                 <div class="admin-only">
-                  <button class="btn btn-sm btn-link text-success p-0 fw-bold text-decoration-none" onclick="adminCheckout('${x.telepon}')">CHECKOUT <i class="fa-solid fa-chevron-right ms-1"></i></button>
+                  <button class="btn btn-sm btn-link text-success p-0 fw-bold text-decoration-none" onclick="adminCheckout(${x.row_index})">CHECKOUT <i class="fa-solid fa-chevron-right ms-1"></i></button>
                 </div>
               </div>
             </div>
@@ -813,9 +813,11 @@
       document.querySelector('.sidebar-overlay').classList.toggle('active');
     }
 
+    var isCheckoutInProgress = false;
+    var isCheckinInProgress = false;
+
     function handleSmartSearch(val) {
       const suggestionBox = document.getElementById('searchSuggestions');
-      document.getElementById('selectedCheckoutPhone').value = "";
       if (!val || val.trim().length < 1) { suggestionBox.classList.add('d-none'); return; }
       
       const searchStr = val.toLowerCase().trim();
@@ -823,13 +825,14 @@
       let html = '';
       if (matches.length > 0) {
         matches.forEach(m => {
-          html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-success border-bottom" onclick="selectSuggestion('${m.nama}', '${m.telepon}')">
-                    <i class="fa-solid fa-arrow-right-from-bracket me-2 text-danger"></i> Checkout: ${m.nama}
+          const safeName = m.nama.replace(/'/g, "\\'");
+          html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-success border-bottom" onclick="executeVisitorCheckout(${m.row_index}, '${safeName}')">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-2 text-danger"></i> Check-out Sekarang: ${m.nama} (V-${m.visitorId})
                    </button>`;
         });
       }
       html += `<button type="button" class="list-group-item list-group-item-action py-3 fw-bold text-primary bg-light" onclick="selectSuggestionNew()">
-                <i class="fa-solid fa-user-plus me-2"></i> Tamu Baru: Lanjut Check-in
+                <i class="fa-solid fa-user-plus me-2"></i> Tamu Baru: Lanjut Formulir Check-in
                </button>`;
       suggestionBox.innerHTML = html;
       suggestionBox.classList.remove('d-none');
@@ -862,11 +865,40 @@
       document.getElementById('staffSuggestions').classList.add('d-none');
     }
 
-    function selectSuggestion(nama, phone) {
-      document.getElementById('guestInitialInput').value = nama;
-      document.getElementById('selectedCheckoutPhone').value = phone;
+    async function executeVisitorCheckout(rowIndex, nama) {
       document.getElementById('searchSuggestions').classList.add('d-none');
-      handleGuestSubmit();
+      if (isCheckoutInProgress) return;
+
+      const confirmResult = await Swal.fire({
+        title: 'Konfirmasi Check-out',
+        text: `Halo ${nama}, apakah Anda ingin menyelesaikan kunjungan sekarang?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#059669',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Ya, Check-out Sekarang',
+        cancelButtonText: 'Batal'
+      });
+
+      if (confirmResult.isConfirmed) {
+        isCheckoutInProgress = true;
+        document.getElementById('fullPageLoader').style.display = 'flex';
+        try {
+          const res = await gasRun('processScan', rowIndex);
+          document.getElementById('fullPageLoader').style.display = 'none';
+          if (res && res.success && res.action === 'checkout') {
+            await Swal.fire('Check-out Berhasil', `Terima kasih atas kunjungan Anda, ${res.nama || nama}!`, 'success');
+            resetVisitorView();
+          } else {
+            Swal.fire('Perhatian', res?.message || 'Data tamu tidak ditemukan atau sudah check-out.', 'warning');
+          }
+        } catch (err) {
+          document.getElementById('fullPageLoader').style.display = 'none';
+          Swal.fire('Error', 'Gagal memproses check-out. Silakan hubungi petugas.', 'error');
+        } finally {
+          isCheckoutInProgress = false;
+        }
+      }
     }
 
     function selectSuggestionNew() {
@@ -877,12 +909,39 @@
     function handleGuestSubmit() {
       var initialInput = document.getElementById('guestInitialInput').value.trim();
       if (!initialInput) return Swal.fire('Perhatian', 'Silakan ketik nama Anda.', 'warning');
+
+      // Proteksi cerdas: periksa apakah nama ini sudah aktif di dalam gedung
+      const activeMatch = dbVisitors.find(v => v.status === 'Hadir' && v.nama.toLowerCase().trim() === initialInput.toLowerCase());
+      if (activeMatch) {
+        Swal.fire({
+          title: 'Tamu Sudah Terdaftar',
+          text: `Ditemukan data tamu aktif atas nama "${activeMatch.nama}". Apakah Anda bermaksud untuk Check-out?`,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonColor: '#059669',
+          cancelButtonColor: '#3b82f6',
+          confirmButtonText: 'Ya, Check-out',
+          cancelButtonText: 'Daftar Kunjungan Baru'
+        }).then((res) => {
+          if (res.isConfirmed) {
+            executeVisitorCheckout(activeMatch.row_index, activeMatch.nama);
+          } else if (res.dismiss === Swal.DismissReason.cancel) {
+            document.getElementById('step-scan').classList.add('d-none');
+            document.getElementById('step-form').classList.remove('d-none');
+            document.getElementById('guestNama').value = initialInput;
+          }
+        });
+        return;
+      }
+
       document.getElementById('step-scan').classList.add('d-none');
       document.getElementById('step-form').classList.remove('d-none');
       document.getElementById('guestNama').value = initialInput;
     }
 
     async function submitCheckin() {
+      if (isCheckinInProgress) return;
+
       var p = { 
         id: document.getElementById('guestPhone').value.trim(), 
         nama: document.getElementById('guestNama').value.trim(), 
@@ -898,22 +957,35 @@
         return Swal.fire('Data Kurang', 'Nama, No. Telp, No. Visitor, dan Lantai wajib diisi.', 'warning');
       }
 
+      isCheckinInProgress = true;
       document.getElementById('fullPageLoader').style.display = 'flex';
 
       try {
         const res = await gasRun('saveCheckin', p);
         document.getElementById('fullPageLoader').style.display = 'none';
-        Swal.fire('Registrasi Berhasil', 'Selamat Datang Mr./Ms. ' + p.nama, 'success').then(resetVisitorView);
+        if (res && res.success) {
+          await Swal.fire('Registrasi Berhasil', 'Selamat Datang ' + p.nama, 'success');
+          resetVisitorView();
+        } else {
+          Swal.fire('Gagal', res?.message || 'Gagal menyimpan check-in.', 'error');
+        }
       } catch (err) {
         document.getElementById('fullPageLoader').style.display = 'none';
         Swal.fire('Error', 'Gagal menyimpan data.', 'error');
+      } finally {
+        isCheckinInProgress = false;
       }
     }
 
-    async function adminCheckout(phone) {
+    async function adminCheckout(rowIndex) {
+      if (isCheckoutInProgress) return;
+
+      const visitor = dbVisitors.find(v => v.row_index == rowIndex);
+      const visitorName = visitor ? ` (${visitor.nama})` : '';
+
       Swal.fire({
         title: 'Checkout Tamu?',
-        text: "Apakah Anda yakin ingin menyelesaikan kunjungan tamu ini?",
+        text: `Apakah Anda yakin ingin menyelesaikan kunjungan tamu${visitorName}?`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#059669',
@@ -922,14 +994,22 @@
         cancelButtonText: 'Batal'
       }).then(async (result) => {
         if (result.isConfirmed) {
+          isCheckoutInProgress = true;
           document.getElementById('fullPageLoader').style.display = 'flex';
           try {
-            await gasRun('processScan', phone);
+            const res = await gasRun('processScan', rowIndex);
             document.getElementById('fullPageLoader').style.display = 'none';
-            Swal.fire('Berhasil', 'Tamu telah di-checkout.', 'success').then(() => loadDashboardData());
+            if (res && res.success && res.action === 'checkout') {
+              await Swal.fire('Berhasil', `Tamu ${res.nama || ''} telah di-checkout.`, 'success');
+              await loadDashboardData();
+            } else {
+              Swal.fire('Perhatian', res?.message || 'Gagal memproses checkout. Status tamu mungkin sudah selesai.', 'warning');
+            }
           } catch (err) {
             document.getElementById('fullPageLoader').style.display = 'none';
             Swal.fire('Error', 'Gagal memproses checkout.', 'error');
+          } finally {
+            isCheckoutInProgress = false;
           }
         }
       });
