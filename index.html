@@ -542,9 +542,11 @@
         }
       };
 
+      const readActions = ['getVisitors', 'getStaffData', 'getSummaryReport', 'getScriptUrl'];
+      const methodToUse = readActions.includes(name) ? 'GET' : 'POST';
+
       try {
-        // Eksekusi langsung via POST untuk menghindari kegagalan redirect GET dan double-roundtrip penalty
-        return await executeHttpRequest('POST');
+        return await executeHttpRequest(methodToUse);
       } catch (finalErr) {
         console.error("gasRun Error (" + name + "):", finalErr);
         return { 
@@ -592,29 +594,21 @@
       if (name === 'qr-station') {
         generateQr();
       } else if (name === 'dashboard' || name === 'visitors') {
-        // Jika data sudah ada di memori, tampilkan instan dan lakukan refresh di latar belakang (non-blocking)
-        const isInitialLoad = dbVisitors.length === 0;
-        await loadDashboardData(!isInitialLoad);
+        await loadDashboardData();
       }
     }
 
-    async function loadDashboardData(isBackground = false) {
-      if (!isBackground) {
-        document.getElementById('fullPageLoader').style.display = 'flex';
-      }
+    async function loadDashboardData() {
+      document.getElementById('fullPageLoader').style.display = 'flex';
       try {
         const data = await gasRun('getVisitors');
-        if (Array.isArray(data)) {
-          dbVisitors = data;
-          renderStats();
-          renderTable();
-        }
+        dbVisitors = Array.isArray(data) ? data : [];
+        renderStats();
+        renderTable();
       } catch (err) {
         console.error("Gagal mengambil data tamu:", err);
       } finally {
-        if (!isBackground) {
-          document.getElementById('fullPageLoader').style.display = 'none';
-        }
+        document.getElementById('fullPageLoader').style.display = 'none';
       }
     }
 
@@ -802,37 +796,17 @@
     async function loadVisitorModeData() {
       isLoadingVisitors = true;
       try {
-        // Periksa ketersediaan cache staf lokal (TTL 6 jam)
-        const cachedStaff = localStorage.getItem('vms_staff_cache');
-        const staffCacheTime = localStorage.getItem('vms_staff_cache_time');
-        const isStaffCacheValid = cachedStaff && staffCacheTime && (Date.now() - Number(staffCacheTime) < 21600000);
-
-        if (isStaffCacheValid) {
-          try {
-            dbStaff = JSON.parse(cachedStaff);
-          } catch (e) {
-            dbStaff = [];
-          }
-        }
-
-        // Jalankan fetch pengunjung, dan sertakan fetch staf hanya bila cache belum ada / kadaluwarsa
-        const requests = [gasRun('getVisitors')];
-        if (!isStaffCacheValid || dbStaff.length === 0) {
-          requests.push(gasRun('getStaffData'));
-        }
-
-        const responses = await Promise.all(requests);
+        // Ambil data staf dan data pengunjung secara paralel (tidak antre berurutan)
+        const [visitorRes, staffRes] = await Promise.all([
+          gasRun('getVisitors'),
+          gasRun('getStaffData')
+        ]);
         
-        if (Array.isArray(responses[0])) {
-          dbVisitors = responses[0];
+        if (Array.isArray(visitorRes)) {
+          dbVisitors = visitorRes;
         }
-
-        if (responses[1] && Array.isArray(responses[1])) {
-          dbStaff = responses[1];
-          try {
-            localStorage.setItem('vms_staff_cache', JSON.stringify(dbStaff));
-            localStorage.setItem('vms_staff_cache_time', Date.now().toString());
-          } catch (storageErr) {}
+        if (Array.isArray(staffRes)) {
+          dbStaff = staffRes;
         }
 
         // Jika pengunjung sudah terlanjur mengetik namanya sebelum data selesai diunduh,
