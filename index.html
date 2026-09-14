@@ -468,6 +468,14 @@
     var isVisitorMode = false;
     var currentUser = null;
     var dbVisitors = [];
+    try {
+      var cachedVis = localStorage.getItem('vms_visitors_cache');
+      if (cachedVis) {
+        dbVisitors = JSON.parse(cachedVis);
+      }
+    } catch (e) {
+      dbVisitors = [];
+    }
     var dbStaff = [];
     var floorChart = null;
     var editModal = null;
@@ -601,6 +609,13 @@
     }
 
     async function loadDashboardData(isBackground = false) {
+      // Jika data cache lokal sudah ada, tampilkan tabel dan KPI seketika tanpa memblokir layar
+      if (dbVisitors && dbVisitors.length > 0) {
+        renderStats();
+        renderTable();
+        isBackground = true;
+      }
+
       if (!isBackground) {
         document.getElementById('fullPageLoader').style.display = 'flex';
       }
@@ -608,6 +623,9 @@
         const data = await gasRun('getVisitors');
         if (Array.isArray(data)) {
           dbVisitors = data;
+          try {
+            localStorage.setItem('vms_visitors_cache', JSON.stringify(data));
+          } catch (storageErr) {}
           renderStats();
           renderTable();
         }
@@ -802,7 +820,17 @@
     var isLoadingVisitors = false;
 
     async function loadVisitorModeData() {
-      isLoadingVisitors = true;
+      // Hidrasi data tamu dari storage lokal seketika
+      try {
+        const cachedVis = localStorage.getItem('vms_visitors_cache');
+        if (cachedVis) {
+          dbVisitors = JSON.parse(cachedVis);
+        }
+      } catch (e) {}
+
+      // Jika cache lokal sudah ada, jangan kunci input status loading
+      isLoadingVisitors = (dbVisitors.length === 0);
+
       try {
         // Periksa ketersediaan cache staf lokal (TTL 6 jam)
         const cachedStaff = localStorage.getItem('vms_staff_cache');
@@ -827,6 +855,9 @@
         
         if (Array.isArray(responses[0])) {
           dbVisitors = responses[0];
+          try {
+            localStorage.setItem('vms_visitors_cache', JSON.stringify(dbVisitors));
+          } catch (storageErr) {}
         }
 
         if (responses[1] && Array.isArray(responses[1])) {
